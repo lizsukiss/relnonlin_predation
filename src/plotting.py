@@ -1,6 +1,7 @@
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import ConnectionPatch
+from matplotlib.colors import ListedColormap
 import numpy as np
 from utils import check_params
 
@@ -16,7 +17,8 @@ def simple_d1d2(coexistence_matrix, maxd1, maxd2, title, ax=None):
     ax.set_ylim([0, maxd2])
     ax.set_xlabel(r'death rate of $C_1$ ($d_1$)',fontsize=10)
     ax.set_ylabel(r'death rate of $C_2$ ($d_2$)',fontsize=10)
-    im = ax.imshow(-np.transpose(coexistence_matrix), origin='lower', cmap='gray', 
+    custom_cmap = ListedColormap(['white', 'black'])
+    im = ax.imshow(np.transpose(coexistence_matrix), origin='lower', cmap=custom_cmap,
                    extent=[0, maxd1, 0, maxd2], aspect='auto')
     return ax, im
 
@@ -68,7 +70,7 @@ def plot_coexistence_subplot(ax, coexistence_matrix, params, title):
     h2 = params['h2']
     
     maxd1 = a1
-    maxd2 = a2
+    maxd2 = a2/(1 + h2 * a2)
 
     simple_d1d2(coexistence_matrix, maxd1, maxd2, title, ax=ax)
     draw_lines(params, ax=ax)
@@ -109,7 +111,7 @@ def summary_plot(params):
     aP = params['aP']
     dP = params['dP']
 
-    filename = f'matrices_{a1}_{a2}_{aP}_{h2}_{dP}.npz'
+    filename = f'results/simulations/matrices_{a1}_{a2}_{aP}_{h2}_{dP}.npz'
     
     data = np.load(filename)
     coexistence_lin_sat= data['coexistence_lin_sat']
@@ -118,19 +120,17 @@ def summary_plot(params):
     coexistence_lin_sat_pred= data['coexistence_lin_sat_pred']
     coexistence_sat_sat_pred= data['coexistence_sat_sat_pred']
 
-    fig, axs = plt.subplots(2, 3, figsize=(9, 3))
+    fig, axs = plt.subplots(2, 3, figsize=(10, 6))
     plot_coexistence_subplot(axs[0, 1], coexistence_lin_sat, params, 'Linear–saturating')
     plot_coexistence_subplot(axs[0, 2], coexistence_sat_sat, params, 'Saturating–saturating')
     plot_coexistence_subplot(axs[1, 0], coexistence_lin_lin_pred, params, 'Linear–linear + predation')
     plot_coexistence_subplot(axs[1, 1], coexistence_lin_sat_pred, params, 'Linear–saturating + predation')
     plot_coexistence_subplot(axs[1, 2], coexistence_sat_sat_pred, params, 'Saturating–saturating + predation')
 
-    add_arrows(fig, axs)
+    #add_arrows(fig, axs)
     
     # Add params annotation to the figure
     param_text = "\n".join([f"{k} = {v}" for k, v in params.items()])
     fig.text(0.99, 0.01, param_text, ha='right', va='bottom', fontsize=10, bbox=dict(facecolor='white', alpha=0.7, edgecolor='gray'))
-
-    plt.show()
 
     return fig, axs

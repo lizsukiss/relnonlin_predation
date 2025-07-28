@@ -20,3 +20,4 @@ def check_params(params, required):
     missing = [key for key in required if key not in params]
     if missing:
         raise ValueError(f"Missing parameters: {', '.join(missing)}")
+    

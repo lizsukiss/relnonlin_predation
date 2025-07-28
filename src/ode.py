@@ -2,8 +2,8 @@ from utils import check_params
 
 # R-C system
 def predator_prey(x,t,params):
-    
-    check_params(params, ['a', 'h', 'd'])
+
+    check_params(params, {'a', 'h', 'd'})
 
     a = params['a']
     h = params['h']
