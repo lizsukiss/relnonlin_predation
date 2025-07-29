@@ -111,7 +111,7 @@ def summary_plot(params):
     aP = params['aP']
     dP = params['dP']
 
-    filename = f'results/simulations/matrices_{a1}_{a2}_{aP}_{h2}_{dP}.npz'
+    filename = f'results/matrices/matrices_{a1}_{a2}_{aP}_{h2}_{dP}.npz'
     
     data = np.load(filename)
     coexistence_lin_sat= data['coexistence_lin_sat']

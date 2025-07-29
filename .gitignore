@@ -1,0 +1,7 @@
+results/
+timeseries/
+*.npz
+*.npy
+*.h5
+__pycache__/
+.venv/
