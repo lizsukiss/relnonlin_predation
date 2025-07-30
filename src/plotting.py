@@ -3,7 +3,10 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import ConnectionPatch
 from matplotlib.colors import ListedColormap
 import numpy as np
+from scipy import integrate as integ
+from functools import partial
 from utils import check_params
+from ode import full_system
 
 
 def simple_d1d2(coexistence_matrix, maxd1, maxd2, title, ax=None):
@@ -103,15 +106,16 @@ def add_arrows(fig, axs, color="green"):
 
 def summary_plot(params):
 
-    check_params(params, ['a1', 'a2', 'h2', 'aP', 'dP'])
+    check_params(params, ['a1', 'a2', 'h2', 'aP', 'dP', 'resolution'])
 
     a1 = params['a1']
     a2 = params['a2']
     h2 = params['h2']
     aP = params['aP']
     dP = params['dP']
+    resolution = params['resolution']
 
-    filename = f'results/matrices/matrices_{a1}_{a2}_{aP}_{h2}_{dP}.npz'
+    filename = f'results/matrices/matrices_{a1}_{a2}_{aP}_{h2}_{dP}_{resolution}.npz'
     
     data = np.load(filename)
     coexistence_lin_sat= data['coexistence_lin_sat']
@@ -121,7 +125,7 @@ def summary_plot(params):
     coexistence_sat_sat_pred= data['coexistence_sat_sat_pred']
 
     fig, axs = plt.subplots(2, 3, figsize=(10, 6))
-    plot_coexistence_subplot(axs[0, 1], coexistence_lin_sat, params, 'Linear–saturating')
+    plot_coexistence_subplot(axs[0, 1], coexistence_lin_sat, params, 'Linear–saturating') # own function implemented for something else
     plot_coexistence_subplot(axs[0, 2], coexistence_sat_sat, params, 'Saturating–saturating')
     plot_coexistence_subplot(axs[1, 0], coexistence_lin_lin_pred, params, 'Linear–linear + predation')
     plot_coexistence_subplot(axs[1, 1], coexistence_lin_sat_pred, params, 'Linear–saturating + predation')
@@ -136,7 +140,7 @@ def summary_plot(params):
     return fig, axs
 
 
-def summary_dynamics_plots(params):
+def summary_dynamics_plots(params): 
 
     check_params(params, ['a1', 'a2', 'h2', 'aP', 'd1', 'd2', 'dP'])
 
@@ -148,24 +152,62 @@ def summary_dynamics_plots(params):
     d2 = params['d2']
     dP = params['dP']
 
-    # some of these have not yet been simulated !!!
-    # all of these have to be saved and loaded carefully !!!
-
-    #filename_linsat = f'results/timeseries/timeseries_{a1}_{a2}_{aP}_{h2}_{dP}.npz'
+    # It would be difficult to reload the plots of the population dynamics because 
+    # (1) they were not necessarily simulated in the first place 
+    # (2) have been probably moved permanently to the external data storage
     
-    #data = np.load(filename)
-    #coexistence_lin_sat= data['coexistence_lin_sat']
-    #coexistence_sat_sat= data['coexistence_sat_sat']
-    #coexistence_lin_lin_pred= data['coexistence_lin_lin_pred']
-    #coexistence_lin_sat_pred= data['coexistence_lin_sat_pred']
-    #coexistence_sat_sat_pred= data['coexistence_sat_sat_pred']
+    tend  = 10000
+    tstep = 0.1
+    t  = np.arange(0,tend,tstep) # time for simulation
 
-    #fig, axs = plt.subplots(2, 3, figsize=(10, 6))
-    #plot_coexistence_subplot(axs[0, 1], coexistence_lin_sat, params, 'Linear–saturating')
-    #plot_coexistence_subplot(axs[0, 2], coexistence_sat_sat, params, 'Saturating–saturating')
-    #plot_coexistence_subplot(axs[1, 0], coexistence_lin_lin_pred, params, 'Linear–linear + predation')
-    #plot_coexistence_subplot(axs[1, 1], coexistence_lin_sat_pred, params, 'Linear–saturating + predation')
-    #plot_coexistence_subplot(axs[1, 2], coexistence_sat_sat_pred, params, 'Saturating–saturating + predation')
+    short_params = {'a1':a1, 'a2':a2, 'aP':aP, 'h1':0, 'h2':h2, 'hP':0, 'd1':d1, 'd2':d2, 'dP':dP}
+    
+    # LinSat
+    short_params_lin_sat = {'a1':a1, 'a2':a2, 'aP':0, 'h1':0, 'h2':h2, 'hP':0, 'd1':d1, 'd2':d2, 'dP':0}
+    x_lin_sat = [0.01, 0.01, 0.01, 0]
+
+    system_lin_sat = lambda x, t: full_system(x, t, short_params_lin_sat)
+    dynamics_lin_sat  = integ.odeint(system_lin_sat, x_lin_sat, t, rtol = 10**(-14), atol = 10**(-12))
+
+    # LinSatPred
+    short_params_lin_sat_pred = {'a1':a1, 'a2':a2, 'aP':aP, 'h1':0, 'h2':h2, 'hP':0, 'd1':d1, 'd2':d2, 'dP':dP}
+    x_lin_sat_pred = [0.01, 0.01, 0.01, 0.01]
+    
+    system_lin_sat_pred = lambda x, t: full_system(x, t, short_params_lin_sat_pred)
+    dynamics_lin_sat_pred  = integ.odeint(system_lin_sat_pred, x_lin_sat_pred, t, rtol = 10**(-14), atol = 10**(-12))
+
+    # SatSat
+    gamma = a1/a2 + h2*d1
+    sat_a = gamma*a2
+    sat_h = h2/gamma
+    sat_d = d1
+    short_params_sat_sat = {'a1':sat_a, 'a2':a2, 'aP':0, 'h1':sat_h, 'h2':h2, 'hP':0, 'd1':sat_d, 'd2':d2, 'dP':0}
+    x_sat_sat = [0.01, 0.01, 0.01, 0]
+
+    system_sat_sat = lambda x, t: full_system(x, t, short_params_sat_sat)
+    dynamics_sat_sat  = integ.odeint(system_sat_sat, x_sat_sat, t, rtol = 10**(-14), atol = 10**(-12))
+
+    # SatSatPred
+    short_params_sat_sat_pred = {'a1':sat_a, 'a2':a2, 'aP':aP, 'h1':sat_h, 'h2':h2, 'hP':0, 'd1':sat_d, 'd2':d2, 'dP':dP}
+    x_sat_sat_pred = [0.01, 0.01, 0.01, 0.01]
+
+    system_sat_sat_pred = lambda x, t: full_system(x, t, short_params_sat_sat_pred)
+    dynamics_sat_sat_pred  = integ.odeint(system_sat_sat_pred, x_sat_sat_pred, t, rtol = 10**(-14), atol = 10**(-12))
+
+    # LinLinPred
+    lin_a = (1-d2*h2)*a2
+    short_params_lin_lin_pred = {'a1':a1, 'a2':lin_a, 'aP':aP, 'h1':0, 'h2':0, 'hP':0, 'd1':d1, 'd2':d2, 'dP':dP}
+    x_lin_lin_pred = [0.01, 0.01, 0.01, 0.01]
+
+    system_lin_lin_pred = lambda x, t: full_system(x, t, short_params_lin_lin_pred)
+    dynamics_lin_lin_pred  = integ.odeint(system_lin_lin_pred, x_lin_lin_pred, t, rtol = 10**(-14), atol = 10**(-12))
+
+    fig, axs = plt.subplots(2, 3, figsize=(10, 6))
+    axs[0, 1].plot(t, dynamics_lin_sat)
+    axs[0, 2].plot(t, dynamics_sat_sat)
+    axs[1, 0].plot(t, dynamics_lin_lin_pred)
+    axs[1, 1].plot(t, dynamics_lin_sat_pred)
+    axs[1, 2].plot(t, dynamics_sat_sat_pred)
 
     #add_arrows(fig, axs)
     
