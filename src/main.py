@@ -6,6 +6,8 @@ from coexistence import lin_sat, lin_lin_pred, sat_sat, sat_sat_pred, lin_sat_pr
 from plotting import summary_plot
 import matplotlib.pyplot as plt
 
+import glob
+
 from tqdm import tqdm
     
 def main():
@@ -82,7 +84,7 @@ def main():
         tqdm.write("LinLinPred done")
 
        # save
-        filename = f'results/matrices/matrices_{params["a1"]}_{params["a2"]}_{params["aP"]}_{params["h2"]}_{params["dP"]}.npz'
+        filename = f'results/matrices/matrices_{params["a1"]}_{params["a2"]}_{params["aP"]}_{params["h2"]}_{params["dP"]}_{params["resolution"]}.npz'
         np.savez(filename,
                  coexistence_lin_sat=coexistence_lin_sat,
                  coexistence_lin_sat_pred=coexistence_lin_sat_pred,
@@ -98,5 +100,50 @@ def main():
         fig.savefig(plot_filename)    
         tqdm.write("Plotting done and saved")
 
+def explore_results():
+    
+    # List all result files (with CoPilot)
+    files = glob.glob('results/matrices/matrices_*.npz')
+    print("Available simulations:")
+    for i, f in enumerate(files):
+        try:
+            data = np.load(f, allow_pickle=True)
+            params = data['params'].item()  # assuming params is saved as a dict
+            param_str = ", ".join(f"{k}={v}" for k, v in params.items())
+            print(f"{i}: {param_str}")
+        except Exception as e:
+            print(f"{i}: Could not read parameters from {f} ({e})")
+
+    idx = int(input("Select a simulation by number: "))
+    data = np.load(files[idx], allow_pickle=True)
+    params = data['params'].item()  # if saved as dict
+
+    print("Loaded parameters:", params)
+    # Now ask for mortality rates and plot as needed
+    d1_input = int(input("Provide d1 (mortality rate of C1): "))
+    d2_input = int(input("Provide d2 (mortality rate of C2): "))
+
+    a1 = params['a1']
+    a2 = params['a2']
+    h2 = params['h2']
+    resolution = params['resolution']
+
+    maxd1 = a1
+    maxd2 = a2 / (1 + h2 * a2)
+    d1_grid = np.linspace(0, maxd1, resolution + 2)[1:-1]
+    d2_grid = np.linspace(0, maxd2, resolution + 2)[1:-1]
+
+    # Find nearest grid point indices
+    i = (np.abs(d1_grid - d1_input)).argmin()
+    j = (np.abs(d2_grid - d2_input)).argmin()
+
+    print(f"Nearest grid point for d1: {d1_grid[i]}, index: {i}")
+    print(f"Nearest grid point for d2: {d2_grid[j]}, index: {j}")
+
+    
+    # plot_individual_case(params)
+    # plt.show()
+
 if __name__ == "__main__":
-    main()
+    main()             # Uncomment to run simulations
+    explore_results()  # Uncomment to explore results

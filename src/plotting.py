@@ -134,3 +134,43 @@ def summary_plot(params):
     fig.text(0.99, 0.01, param_text, ha='right', va='bottom', fontsize=10, bbox=dict(facecolor='white', alpha=0.7, edgecolor='gray'))
 
     return fig, axs
+
+
+def summary_dynamics_plots(params):
+
+    check_params(params, ['a1', 'a2', 'h2', 'aP', 'd1', 'd2', 'dP'])
+
+    a1 = params['a1']
+    a2 = params['a2']
+    h2 = params['h2']
+    aP = params['aP']
+    d1 = params['d1']
+    d2 = params['d2']
+    dP = params['dP']
+
+    # some of these have not yet been simulated !!!
+    # all of these have to be saved and loaded carefully !!!
+
+    #filename_linsat = f'results/timeseries/timeseries_{a1}_{a2}_{aP}_{h2}_{dP}.npz'
+    
+    #data = np.load(filename)
+    #coexistence_lin_sat= data['coexistence_lin_sat']
+    #coexistence_sat_sat= data['coexistence_sat_sat']
+    #coexistence_lin_lin_pred= data['coexistence_lin_lin_pred']
+    #coexistence_lin_sat_pred= data['coexistence_lin_sat_pred']
+    #coexistence_sat_sat_pred= data['coexistence_sat_sat_pred']
+
+    #fig, axs = plt.subplots(2, 3, figsize=(10, 6))
+    #plot_coexistence_subplot(axs[0, 1], coexistence_lin_sat, params, 'Linear–saturating')
+    #plot_coexistence_subplot(axs[0, 2], coexistence_sat_sat, params, 'Saturating–saturating')
+    #plot_coexistence_subplot(axs[1, 0], coexistence_lin_lin_pred, params, 'Linear–linear + predation')
+    #plot_coexistence_subplot(axs[1, 1], coexistence_lin_sat_pred, params, 'Linear–saturating + predation')
+    #plot_coexistence_subplot(axs[1, 2], coexistence_sat_sat_pred, params, 'Saturating–saturating + predation')
+
+    #add_arrows(fig, axs)
+    
+    # Add params annotation to the figure
+    #param_text = "\n".join([f"{k} = {v}" for k, v in params.items()])
+    #fig.text(0.99, 0.01, param_text, ha='right', va='bottom', fontsize=10, bbox=dict(facecolor='white', alpha=0.7, edgecolor='gray'))
+
+    #return fig, axs
