@@ -124,7 +124,8 @@ def summary_plot(params):
     coexistence_lin_sat_pred= data['coexistence_lin_sat_pred']
     coexistence_sat_sat_pred= data['coexistence_sat_sat_pred']
 
-    fig, axs = plt.subplots(2, 3, figsize=(10, 6))
+    fig, axs = plt.subplots(2, 3, figsize=(10, 8))
+    fig.subplots_adjust(wspace=0.3, hspace=0.4)  # more whitespace between subplots
     plot_coexistence_subplot(axs[0, 1], coexistence_lin_sat, params, 'Linear–saturating') # own function implemented for something else
     plot_coexistence_subplot(axs[0, 2], coexistence_sat_sat, params, 'Saturating–saturating')
     plot_coexistence_subplot(axs[1, 0], coexistence_lin_lin_pred, params, 'Linear–linear + predation')

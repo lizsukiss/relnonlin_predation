@@ -62,11 +62,12 @@ def main():
         filename = f'results/matrices/matrices_{params["a1"]}_{params["a2"]}_{params["aP"]}_{params["h2"]}_{params["dP"]}_{params["resolution"]}.npz'
 
         if os.path.exists(filename):
-            results = np.load(filename, allow_pickle=True)
-            
+            results = dict(np.load(filename, allow_pickle=True))
+            DVCupdate = False  # Flag to indicate if we need to update DVC
         else:
             results = {}
             results["params"] = params
+            DVCupdate = True  # Flag to indicate if we need to update DVC
         
         # run the coex functions
         if "coexistence_lin_sat" not in results:  
@@ -102,19 +103,9 @@ def main():
             coexistence_lin_lin_pred = lin_lin_pred(params)
             tqdm.write("LinLinPred done")
             results['coexistence_lin_lin_pred'] = coexistence_lin_lin_pred
-            np.savez(filename, **results)
+            np.savez(filename, **results)  # Overwrites file, but keeps all arrays so far
 
-        # save
-            filename = f'results/matrices/matrices_{params["a1"]}_{params["a2"]}_{params["aP"]}_{params["h2"]}_{params["dP"]}_{params["resolution"]}.npz'
-            np.savez(filename,
-                    coexistence_lin_sat=coexistence_lin_sat,
-                    coexistence_lin_sat_pred=coexistence_lin_sat_pred,
-                    coexistence_sat_sat=coexistence_sat_sat,
-                    coexistence_sat_sat_pred=coexistence_sat_sat_pred,
-                    coexistence_lin_lin_pred=coexistence_lin_lin_pred,
-                    params=params)
-            tqdm.write("Saving everything")
-
+        if DVCupdate:
             # ... run simulation and save results ...
             os.system("dvc add results")  # or the specific file
             os.system("git add results.dvc")
@@ -125,10 +116,11 @@ def main():
             os.makedirs("results/timeseries", exist_ok=True) # recreate an empty folder
 
         # plot
+        tqdm.write("Plotting starts")
         fig, axs = summary_plot(params)
         plot_filename = f'results/plots/summary_{params["a1"]}_{params["a2"]}_{params["aP"]}_{params["h2"]}_{params["dP"]}_{params["resolution"]}.png'
         fig.savefig(plot_filename)    
-        tqdm.write("Plotting done and saved")
+        tqdm.write("Plotting done")
 
 
 def explore_results():
