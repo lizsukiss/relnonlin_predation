@@ -1,4 +1,0 @@
-[core]
-    remote = external_drive
-['remote "external_drive"']
-    url = D:/dvcstore
