@@ -5,7 +5,7 @@ from matplotlib.colors import ListedColormap
 import numpy as np
 from scipy import integrate as integ
 from functools import partial
-from utils import check_params
+from utils import check_params, make_filename
 from ode import full_system
 
 
@@ -108,14 +108,7 @@ def summary_plot(params):
 
     check_params(params, ['a1', 'a2', 'h2', 'aP', 'dP', 'resolution'])
 
-    a1 = params['a1']
-    a2 = params['a2']
-    h2 = params['h2']
-    aP = params['aP']
-    dP = params['dP']
-    resolution = params['resolution']
-
-    filename = f'results/matrices/matrices_{a1}_{a2}_{aP}_{h2}_{dP}_{resolution}.npz'
+    filename =  make_filename('results/matrices/matrices',params)
     
     data = np.load(filename)
     coexistence_lin_sat= data['coexistence_lin_sat']
@@ -159,61 +152,64 @@ def summary_dynamics_plots(params):
     
     tend  = 10000
     tstep = 0.1
-    t  = np.arange(0,tend,tstep) # time for simulation
+    time_array  = np.arange(0,tend,tstep) # time for simulation
 
-    short_params = {'a1':a1, 'a2':a2, 'aP':aP, 'h1':0, 'h2':h2, 'hP':0, 'd1':d1, 'd2':d2, 'dP':dP}
-    
     # LinSat
-    short_params_lin_sat = {'a1':a1, 'a2':a2, 'aP':0, 'h1':0, 'h2':h2, 'hP':0, 'd1':d1, 'd2':d2, 'dP':0}
-    x_lin_sat = [0.01, 0.01, 0.01, 0]
+    simulation_params_lin_sat = {'a1':a1, 'a2':a2, 'aP':0, 'h1':0, 'h2':h2, 'hP':0, 'd1':d1, 'd2':d2, 'dP':0}
+    initial_density_lin_sat = [0.01, 0.01, 0.01, 0]
 
-    system_lin_sat = lambda x, t: full_system(x, t, short_params_lin_sat)
-    dynamics_lin_sat  = integ.odeint(system_lin_sat, x_lin_sat, t, rtol = 10**(-14), atol = 10**(-12))
+    system_lin_sat = lambda density, time: full_system(density, time, simulation_params_lin_sat)
+    dynamics_lin_sat  = integ.odeint(system_lin_sat, initial_density_lin_sat, time_array, rtol = 10**(-14), atol = 10**(-12))
 
     # LinSatPred
-    short_params_lin_sat_pred = {'a1':a1, 'a2':a2, 'aP':aP, 'h1':0, 'h2':h2, 'hP':0, 'd1':d1, 'd2':d2, 'dP':dP}
-    x_lin_sat_pred = [0.01, 0.01, 0.01, 0.01]
+    simulation_params_lin_sat_pred = {'a1':a1, 'a2':a2, 'aP':aP, 'h1':0, 'h2':h2, 'hP':0, 'd1':d1, 'd2':d2, 'dP':dP}
+    initial_density_lin_sat_pred = [0.01, 0.01, 0.01, 0.01]
     
-    system_lin_sat_pred = lambda x, t: full_system(x, t, short_params_lin_sat_pred)
-    dynamics_lin_sat_pred  = integ.odeint(system_lin_sat_pred, x_lin_sat_pred, t, rtol = 10**(-14), atol = 10**(-12))
+    system_lin_sat_pred = lambda density, time: full_system(density, time, simulation_params_lin_sat_pred)
+    dynamics_lin_sat_pred  = integ.odeint(system_lin_sat_pred, initial_density_lin_sat_pred, time_array, rtol = 10**(-14), atol = 10**(-12))
 
     # SatSat
     gamma = a1/a2 + h2*d1
     sat_a = gamma*a2
     sat_h = h2/gamma
     sat_d = d1
-    short_params_sat_sat = {'a1':sat_a, 'a2':a2, 'aP':0, 'h1':sat_h, 'h2':h2, 'hP':0, 'd1':sat_d, 'd2':d2, 'dP':0}
-    x_sat_sat = [0.01, 0.01, 0.01, 0]
+    simulation_params_sat_sat = {'a1':sat_a, 'a2':a2, 'aP':0, 'h1':sat_h, 'h2':h2, 'hP':0, 'd1':sat_d, 'd2':d2, 'dP':0}
+    initial_density_sat_sat = [0.01, 0.01, 0.01, 0]
 
-    system_sat_sat = lambda x, t: full_system(x, t, short_params_sat_sat)
-    dynamics_sat_sat  = integ.odeint(system_sat_sat, x_sat_sat, t, rtol = 10**(-14), atol = 10**(-12))
+    system_sat_sat = lambda density, time: full_system(density, time, simulation_params_sat_sat)
+    dynamics_sat_sat  = integ.odeint(system_sat_sat, initial_density_sat_sat, time_array, rtol = 10**(-14), atol = 10**(-12))
 
     # SatSatPred
-    short_params_sat_sat_pred = {'a1':sat_a, 'a2':a2, 'aP':aP, 'h1':sat_h, 'h2':h2, 'hP':0, 'd1':sat_d, 'd2':d2, 'dP':dP}
-    x_sat_sat_pred = [0.01, 0.01, 0.01, 0.01]
+    simulation_params_sat_sat_pred = {'a1':sat_a, 'a2':a2, 'aP':aP, 'h1':sat_h, 'h2':h2, 'hP':0, 'd1':sat_d, 'd2':d2, 'dP':dP}
+    initial_density_sat_sat_pred = [0.01, 0.01, 0.01, 0.01]
 
-    system_sat_sat_pred = lambda x, t: full_system(x, t, short_params_sat_sat_pred)
-    dynamics_sat_sat_pred  = integ.odeint(system_sat_sat_pred, x_sat_sat_pred, t, rtol = 10**(-14), atol = 10**(-12))
+    system_sat_sat_pred = lambda density, time: full_system(density, time, simulation_params_sat_sat_pred)
+    dynamics_sat_sat_pred  = integ.odeint(system_sat_sat_pred, initial_density_sat_sat_pred, time_array, rtol = 10**(-14), atol = 10**(-12))
 
     # LinLinPred
     lin_a = (1-d2*h2)*a2
     short_params_lin_lin_pred = {'a1':a1, 'a2':lin_a, 'aP':aP, 'h1':0, 'h2':0, 'hP':0, 'd1':d1, 'd2':d2, 'dP':dP}
-    x_lin_lin_pred = [0.01, 0.01, 0.01, 0.01]
+    initial_density_lin_lin_pred = [0.01, 0.01, 0.01, 0.01]
 
-    system_lin_lin_pred = lambda x, t: full_system(x, t, short_params_lin_lin_pred)
-    dynamics_lin_lin_pred  = integ.odeint(system_lin_lin_pred, x_lin_lin_pred, t, rtol = 10**(-14), atol = 10**(-12))
+    system_lin_lin_pred = lambda density, time: full_system(density, time, short_params_lin_lin_pred)
+    dynamics_lin_lin_pred  = integ.odeint(system_lin_lin_pred, initial_density_lin_lin_pred, time_array, rtol = 10**(-14), atol = 10**(-12))
 
-    fig, axs = plt.subplots(2, 3, figsize=(10, 6))
-    axs[0, 1].plot(t, dynamics_lin_sat)
-    axs[0, 2].plot(t, dynamics_sat_sat)
-    axs[1, 0].plot(t, dynamics_lin_lin_pred)
-    axs[1, 1].plot(t, dynamics_lin_sat_pred)
-    axs[1, 2].plot(t, dynamics_sat_sat_pred)
-
+    fig, axs = plt.subplots(2, 3, figsize=(10, 8))
+    fig.subplots_adjust(wspace=0.3, hspace=0.4)  # more whitespace between subplots    axs[0, 1].plot(time_array, dynamics_lin_sat)
+    axs[0, 1].set_title("Linear and saturating")
+    axs[0, 2].plot(time_array, dynamics_sat_sat)
+    axs[0, 2].set_title("Both saturating")
+    axs[1, 0].plot(time_array, dynamics_lin_lin_pred)
+    axs[1, 0].set_title("Both linear + predator")
+    axs[1, 1].plot(time_array, dynamics_lin_sat_pred)
+    axs[1, 1].set_title("Linear and saturating")
+    axs[1, 2].plot(time_array, dynamics_sat_sat_pred)
+    axs[1, 2].set_title("Both saturating + predator")
+    
     #add_arrows(fig, axs)
     
     # Add params annotation to the figure
     #param_text = "\n".join([f"{k} = {v}" for k, v in params.items()])
     #fig.text(0.99, 0.01, param_text, ha='right', va='bottom', fontsize=10, bbox=dict(facecolor='white', alpha=0.7, edgecolor='gray'))
 
-    #return fig, axs
+    return fig, axs
