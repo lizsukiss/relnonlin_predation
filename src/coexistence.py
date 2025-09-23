@@ -34,7 +34,7 @@ def lin_sat(params):
     for i in tqdm(np.arange(0,resolution,1), desc="C1 invading C2"):
 
         # Simulation of population dynamics
-        tend  = 10000
+        tend  = 100000
         tstep = 0.1
         time_array = np.arange(0, tend, tstep) # time for simulation
         initial_density = [0.01, 0.01] # initial density
@@ -51,13 +51,15 @@ def lin_sat(params):
             params=rc_simulation_params
         )
 
-        average_R_density = np.mean(density_timeseries[2000:, 0]) # average resource density after transient dynamics 
+        average_R_density = np.mean(density_timeseries[90000:, 0]) # average resource density after transient dynamics 
         invasionrate_C1[:,i] = a1*average_R_density - d1
         
     invasionrate_C1[invasionrate_C1>0]=1
     invasionrate_C1[invasionrate_C1<0]=0 
 
     coexistence_gleanerbasic = invasionrate_C1*invasionrate_C2
+
+    coexistence_gleanerbasic = coexistence_gleanerbasic*2 # limit cycle
 
     return coexistence_gleanerbasic
 
@@ -93,7 +95,7 @@ def lin_lin_pred(params): # the parameters are the same as in the original model
         P_star[i,j] = ( d1[i] * aLin - d2[j] * a1 ) / ( a1 - aLin )
 
     coexistence_lin_lin_predator = (C1_star > 0) & (C2_star > 0) & (P_star > 0) & (R_star > 0)
-    coexistence_lin_lin_predator = coexistence_lin_lin_predator.astype(int)
+    coexistence_lin_lin_predator = coexistence_lin_lin_predator.astype(int) # fixed point equilibrium
 
     return coexistence_lin_lin_predator, P_star
 
@@ -119,12 +121,12 @@ def lin_sat_pred(params):
 
         # Simulation of population dynamics
         initial_density = [0.01,0.01,0.01,0.01] # initial density
-        tend  = 10000 # quite short
+        tend  = 100000 
         tstep = 0.1
         time_array = np.arange(0, tend, tstep) # time for simulation
         simulation_params = {'a1':a1, 'a2':a2, 'aP':aP, 'h1':0, 'h2':h2, 'hP':0, 'd1':d1[i], 'd2':d2[j], 'dP':dP}
 
-        filename = f'results/timeseries/timeseries_RC1C2P_linsatpred_{simulation_params["a1"]}_{simulation_params["a2"]}_{simulation_params["aP"]}_{simulation_params["h2"]}_{simulation_params["d1"]}_{simulation_params["d2"]}_{simulation_params["dP"]}.npz'
+        filename = make_filename(prefix='results/timeseries/timeseries_RC1C2P_linsatpred', params=simulation_params,extension='npz')
 
         full_system_partial = lambda density, time: full_system(density, time, simulation_params)
         density_timeseries = simulate_and_save(
@@ -135,10 +137,13 @@ def lin_sat_pred(params):
             params=simulation_params
         )
 
-        dens_Ave = np.mean(density_timeseries[5000:, :], axis=0) # average resource density after transient dynamics 
-
-        if all(dens_Ave > 0.001):
-            coexistence_mixed[i,j] = 1   
+        dens_Ave = np.mean(density_timeseries[90000:, :], axis=0) # average densities after transient dynamics 
+        dens_CV = np.std(density_timeseries[90000:, :], axis=0) / dens_Ave
+        if all(dens_Ave > 10**-10):
+            if all(dens_CV < 0.01):
+                coexistence_mixed[i,j] = 1 # fixed point
+            else:
+                coexistence_mixed[i,j] = 2 # cycle  
 
     return coexistence_mixed
 
@@ -171,7 +176,7 @@ def sat_sat_pred(params):
         # Simulate population dynamics
         initial_density = [0.01,0.01,0.01,0.01] # initial density
 
-        tend  = 10000 # quite short
+        tend  = 100000 # quite short
         tstep = 0.1
         time_array = np.arange(0, tend, tstep) # time for simulation
         simulation_params = {'a1':sat_a, 'a2':a2, 'aP':aP, 'h1':sat_h, 'h2':h2, 'hP':0, 'd1':sat_d, 'd2':d2[j], 'dP':dP}
@@ -187,10 +192,13 @@ def sat_sat_pred(params):
             params=simulation_params
         )
 
-        average_density = np.mean(density_timeseries[5000:, :], axis=0) # average resource density after transient dynamics
-
-        if all(average_density > 0.001):
-            coexistence_sat_sat_pred[i,j] = 1   
+        average_density = np.mean(density_timeseries[90000:, :], axis=0) # average densities after transient dynamics
+        dens_CV = np.std(density_timeseries[90000:, :], axis=0) / average_density
+        if all(average_density > 10**-10):
+            if all(dens_CV < 0.01):
+                coexistence_sat_sat_pred[i,j] = 1 # fixed point
+            else:
+                coexistence_sat_sat_pred[i,j] = 2 # cycle  
 
     return coexistence_sat_sat_pred
 
@@ -221,7 +229,7 @@ def sat_sat(params): # the input parameters are the same as in the original mode
         # Simulate population dynamics
         initial_density = [0.01,0.01,0.01,0] # initial density
 
-        tend  = 10000 # quite short
+        tend  = 100000 # quite short
         tstep = 0.1
         time_array = np.arange(0, tend, tstep) # time for simulation
         simulation_params = {'a1':sat_a, 'a2':a2, 'aP':0, 'h1':sat_h, 'h2':h2, 'hP':0, 'd1':sat_d, 'd2':d2[j], 'dP':0}
@@ -237,9 +245,13 @@ def sat_sat(params): # the input parameters are the same as in the original mode
             params=simulation_params
         )
 
-        average_density = np.mean(density_timeseries[5000:, :], axis=0) # average resource density after transient dynamics
-        if all(average_density > 0.001):
-            coexistence_sat_sat[i,j] = 1
+        average_density = np.mean(density_timeseries[90000:, :], axis=0) # average densities after transient dynamics
+        dens_CV = np.std(density_timeseries[90000:, :], axis=0) / average_density
+        if all(average_density > 10**-10):
+            if all(dens_CV < 0.01):
+                coexistence_sat_sat[i,j] = 1 # fixed point
+            else:
+                coexistence_sat_sat[i,j] = 2 # cycle  
 
     return coexistence_sat_sat
 
@@ -268,7 +280,7 @@ def coexistence_general(params):
         # Simulation of population dynamics
         initial_density = [0.01,0.01,0.01,0] # initial density
 
-        tend  = 10000 # quite short
+        tend  = 100000 # quite short
         tstep = 0.1
         time_array = np.arange(0, tend, tstep) # time for simulation
         simulation_params = {'a1':a1, 'a2':a2, 'aP':aP, 'h1':h1, 'h2':h2, 'hP':hP, 'd1':d1[i], 'd2':d2[j], 'dP':dP}
@@ -284,12 +296,15 @@ def coexistence_general(params):
             params=simulation_params
         )
 
-        average_density = np.mean(density_timeseries[5000:, :], axis=0) # average resource density after transient dynamics
-        if all(average_density > 0.001):
-            coexistence_general[i,j] = 1
+        average_density = np.mean(density_timeseries[90000:, :], axis=0) # average densities after transient dynamics
+        dens_CV = np.std(density_timeseries[90000:, :], axis=0) / average_density
+        if all(average_density > 10**-10):
+            if all(dens_CV < 0.01):
+                coexistence_general[i,j] = 1 # fixed point
+            else:
+                coexistence_general[i,j] = 2 # cycle  
 
     return coexistence_general
-
 
 def lin_sat_additional_mortality(params):
 
@@ -363,6 +378,8 @@ def lin_sat_additional_mortality(params):
 
     coexistence_gleanerbasic_additional_mortality = invasionrate_C1*invasionrate_C2
 
+    coexistence_gleanerbasic_additional_mortality = coexistence_gleanerbasic_additional_mortality*2 # limit cycle
+
     return coexistence_gleanerbasic_additional_mortality
 
 def sat_sat_additional_mortality(params):
@@ -433,8 +450,12 @@ def sat_sat_additional_mortality(params):
             params=simulation_params
         )
 
-        average_density = np.mean(density_timeseries[5000:, :], axis=0) # average resource density after transient dynamics 
-        if all(average_density > 0.001):
-            coexistence_sat_sat_additional_mortality[i,j] = 1   
-
+        average_density = np.mean(density_timeseries[90000:, :], axis=0) # average densities after transient dynamics
+        dens_CV = np.std(density_timeseries[90000:, :], axis=0) / average_density
+        if all(average_density > 10**-10):
+            if all(dens_CV < 0.01):
+                coexistence_sat_sat_additional_mortality[i,j] = 1 # fixed point
+            else:
+                coexistence_sat_sat_additional_mortality[i,j] = 2 # cycle
+                
     return coexistence_sat_sat_additional_mortality

@@ -4,161 +4,31 @@ import numpy as np
 from ode import predator_prey, full_system
 from analysis_tools import plot_individual_case
 from coexistence import lin_sat, lin_lin_pred, sat_sat, sat_sat_pred, lin_sat_pred, lin_sat_additional_mortality, sat_sat_additional_mortality
-from plotting import plot_coexistence_subplot, summary_plot, summary_dynamics_plots
+from plotting import coexistence_plot_with_lines, summary_plot, summary_dynamics_plots
 from utils import make_filename
 import matplotlib.pyplot as plt
 from plotting import simple_d1d2
-
 import glob
 import shutil
-
 from tqdm import tqdm
-
     
 def main():
 
-    param_sets = [
-    # varying aP
-     {'a1': 1, 'a2': 8, 'aP': 1,
-     'h2': .5, 'hP': 0,
-     'dP': 0.25,
-     'resolution': 50},
-     {'a1': 1, 'a2': 4, 'aP': 1,
-     'h2': .5, 'hP': 0,
-     'dP': 0.25,
-     'resolution': 50},
-     {'a1': 1, 'a2': 4, 'aP': 1,
-     'h2': 2, 'hP': 0,
-     'dP': 0.25,
-     'resolution': 50},
-     {'a1': 1, 'a2': 4, 'aP': 0.5,
-     'h2': 1, 'hP': 0,
-     'dP': 0.25,
-     'resolution': 50},
-     {'a1': 1, 'a2': 4, 'aP': 1,
-     'h2': 1, 'hP': 0,
-     'dP': 0.25,
-     'resolution': 50},
-     {'a1': 1, 'a2': 4, 'aP': 1.5,
-     'h2': 1, 'hP': 0,
-     'dP': 0.25,
-     'resolution': 50},
-     {'a1': 1, 'a2': 4, 'aP': 2,
-     'h2': 1, 'hP': 0,
-     'dP': 0.25,
-     'resolution': 50},
-    # varying dP
-     {'a1': 1, 'a2': 4, 'aP': 1,
-     'h2': 1, 'hP': 0,  
-     'dP': 0.0625,
-     'resolution': 50},
-     {'a1': 1, 'a2': 4, 'aP': 1,
-     'h2': 1, 'hP': 0,
-     'dP': 0.125,
-     'resolution': 50},
-     {'a1': 1, 'a2': 4, 'aP': 1,
-     'h2': 1, 'hP': 0,
-     'dP': 0.25,
-     'resolution': 50},
-     {'a1': 1, 'a2': 4, 'aP': 1,
-     'h2': 1, 'hP': 0,
-     'dP': 0.375,
-     'resolution': 50},
-     {'a1': 1, 'a2': 4, 'aP': 1,
-     'h2': 1, 'hP': 0,
-     'dP': 0.5,
-     'resolution': 50}
-    ]
-    print("Parameters set")
+    params = {'a1': 1, 'a2': 4, 'aP': 1, # or a set with [] when model_name = 'all'
+                           'h2': 1, 'hP': 0, 'dP': 0.25,
+                           'resolution': 100} 
+    model_name = 'lin_sat_pred'  # options: 'lin_sat', 'lin_sat_pred', 
+                        # 'sat_sat', 'sat_sat_pred',
+                        # 'lin_lin', 'lin_lin_pred', 
+                        # 'lin_sat_additional_mortality',
+                        # 'sat_sat_additional_mortality',
+                        # 'all'
+    if model_name != 'all':
+        run_one_case(model_name, params)
+    else:
+        run_all_cases([params])
 
-    for params in tqdm(param_sets, desc="Parameter sets"):
-        tqdm.write(f"Running with params: {params}")
-
-        filename = make_filename('results/matrices/matrices', params)
-
-        if os.path.exists(filename):
-            results = dict(np.load(filename, allow_pickle=True))
-            DVCupdate = False  # Flag to indicate if we need to update DVC
-        else:
-            results = {}
-            results["params"] = params
-            DVCupdate = True  # Flag to indicate if we need to update DVC
-        
-        # run the coex functions
-        if "coexistence_lin_sat" not in results:  
-            tqdm.write("Starting LinSat")
-            coexistence_lin_sat = lin_sat(params)
-            tqdm.write("LinSat done")
-            results['coexistence_lin_sat'] = coexistence_lin_sat
-            np.savez(filename, **results)  # Overwrites file, but keeps all arrays so far
-            DVCupdate = True  # Flag to indicate if we need to update DVC
-
-        if "coexistence_lin_sat_pred" not in results:  
-            tqdm.write("Starting LinSatPred")
-            coexistence_lin_sat_pred = lin_sat_pred(params)
-            tqdm.write("LinSatPred done")
-            results['coexistence_lin_sat_pred'] = coexistence_lin_sat_pred
-            np.savez(filename, **results)  # Overwrites file, but keeps all arrays so far
-            DVCupdate = True  # Flag to indicate if we need to update DVC
-
-        if "coexistence_sat_sat" not in results:
-            tqdm.write("Starting SatSat")
-            coexistence_sat_sat = sat_sat(params)
-            tqdm.write("SatSat done")
-            results['coexistence_sat_sat'] = coexistence_sat_sat
-            np.savez(filename, **results)  # Overwrites file, but keeps all arrays so far
-            DVCupdate = True  # Flag to indicate if we need to update DVC
-
-        if "coexistence_sat_sat_pred" not in results:
-            tqdm.write("Starting SatSatPred")
-            coexistence_sat_sat_pred = sat_sat_pred(params)
-            tqdm.write("SatSatPred done")
-            results['coexistence_sat_sat_pred'] = coexistence_sat_sat_pred
-            np.savez(filename, **results)  # Overwrites file, but keeps all arrays so far
-            DVCupdate = True  # Flag to indicate if we need to update DVC
-
-        if "coexistence_lin_lin_pred" not in results:
-            tqdm.write("Starting LinLinPred")
-            coexistence_lin_lin_pred, _ = lin_lin_pred(params)
-            tqdm.write("LinLinPred done")
-            results['coexistence_lin_lin_pred'] = coexistence_lin_lin_pred
-            np.savez(filename, **results)  # Overwrites file, but keeps all arrays so far
-            DVCupdate = True  # Flag to indicate if we need to update DVC
-
-        if "coexistence_lin_sat_additional_mortality" not in results:
-            tqdm.write("Starting LinSatAdditionalMortality")
-            coexistence_lin_sat_additional_mortality = lin_sat_additional_mortality(params)
-            tqdm.write("LinSatAdditionalMortality done")
-            results['coexistence_lin_sat_additional_mortality'] = coexistence_lin_sat_additional_mortality
-            np.savez(filename, **results)
-            DVCupdate = True  # Flag to indicate if we need to update DVC
-        
-        if "coexistence_sat_sat_additional_mortality" not in results:
-            tqdm.write("Starting SatSatAdditionalMortality")
-            coexistence_sat_sat_additional_mortality = sat_sat_additional_mortality(params)
-            tqdm.write("SatSatAdditionalMortality done")
-            results['coexistence_sat_sat_additional_mortality'] = coexistence_sat_sat_additional_mortality
-            np.savez(filename, **results)
-            DVCupdate = True
-
-        if DVCupdate:
-            os.system("dvc add results") 
-            os.system("git add results.dvc")
-            os.system("dvc push")
-            # not committing to git!
-            # Remove local data to free up space
-            shutil.rmtree("results/timeseries")  # remove the entire folder
-            os.makedirs("results/timeseries", exist_ok=True) # recreate an empty folder
-
-        # plot
-        tqdm.write("Plotting starts")
-        fig, axs = summary_plot(params)
-        plot_filename = make_filename('results/plots/summary',params,extension='.png')
-        fig.savefig(plot_filename)    
-        tqdm.write("Plotting done")
-
-
-def explore_results():
+def explore_results():  # not really finished yet
     
     # List all result files
     files = glob.glob('results/matrices/matrices_*.npz')
@@ -206,7 +76,32 @@ def explore_results():
     summary_dynamics_plots(params) # defined in plotting
     plt.show()
 
-    
+def run_one_case(model_name, params):
+    model_func = globals()[model_name]
+    coexistence_matrix = model_func(params)[0]
+    plot_title = model_name.replace('_', ' ')
+    #coexistence_plot_with_lines(coexistence_matrix, params, plot_title)
+    simple_d1d2(coexistence_matrix, params, plot_title)
+    plt.show()
+
+def run_all_cases(param_sets):
+    for params in param_sets:
+        for model_name in ["lin_sat_additional_mortality", "sat_sat_additional_mortality"]:
+            run_one_case(model_name, params)
+    # After all simulations, update DVC and clean up
+    os.system("dvc add results") 
+    os.system("git add results.dvc")
+    os.system("dvc push")
+    # not committing to git!
+    shutil.rmtree("results/timeseries", ignore_errors=True)  # remove the entire folder
+    os.makedirs("results/timeseries", exist_ok=True) # recreate an empty folder
+
+    # plot
+    tqdm.write("Plotting starts")
+    fig = summary_plot(params)[0]
+    plot_filename = make_filename('results/plots/summary', params, extension='.png')
+    fig.savefig(plot_filename)    
+    tqdm.write("Plotting done")
 
 if __name__ == "__main__":
     main()             # Uncomment to run simulations

@@ -8,11 +8,16 @@ from functools import partial
 from utils import check_params, make_filename
 from ode import full_system
 
-
-def simple_d1d2(coexistence_matrix, maxd1, maxd2, title, ax=None):
+def simple_d1d2(coexistence_matrix, params, title, ax=None):
     """
     Plot the coexistence region on the given axes, or create a new figure if ax is None.
     """
+    a1 = params['a1']
+    h1 = params.get('h1', 0)  # Default to 0 if not provided
+    a2 = params['a2']
+    h2 = params['h2']
+    maxd1 = a1/(1+h1*a1)
+    maxd2 = a2/(1+h2*a2)
     if ax is None:
         fig, ax = plt.subplots(figsize=(3,3))
     ax.set_title(title)
@@ -20,9 +25,15 @@ def simple_d1d2(coexistence_matrix, maxd1, maxd2, title, ax=None):
     ax.set_ylim([0, maxd2])
     ax.set_xlabel(r'death rate of $C_1$ ($d_1$)',fontsize=10)
     ax.set_ylabel(r'death rate of $C_2$ ($d_2$)',fontsize=10)
-    custom_cmap = ListedColormap(['white', 'black'])
+    custom_cmap = ListedColormap(['white', '#0A81D1', '#424242'])  # white, blue, dark gray
     im = ax.imshow(np.transpose(coexistence_matrix), origin='lower', cmap=custom_cmap,
-                   extent=[0, maxd1, 0, maxd2], aspect='auto')
+                   extent=[0, maxd1, 0, maxd2], aspect='auto', vmin=0, vmax=2)
+    legend_labels = ['No coexistence', 'Coexistence at a fixed point', 'Coexistence at a limit cycle/dynamic equilibrium']
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_ticks([0, 1, 2])
+    cbar.set_ticklabels(legend_labels)
+    cbar.ax.tick_params(labelsize=8)
+
     return ax, im
 
 def draw_lines(params,ax):
@@ -64,18 +75,9 @@ def draw_lines(params,ax):
     ax.plot(d1x,C1boundary,'--r',linewidth=2)
     '''
 
-def plot_coexistence_subplot(ax, coexistence_matrix, params, title):
+def coexistence_plot_with_lines(coexistence_matrix, params, title, ax=None):
     
-    check_params(params, ['a1', 'a2', 'h2'])
-
-    a1 = params['a1']
-    a2 = params['a2']
-    h2 = params['h2']
-    
-    maxd1 = a1
-    maxd2 = a2/(1 + h2 * a2)
-
-    simple_d1d2(coexistence_matrix, maxd1, maxd2, title, ax=ax)
+    simple_d1d2(coexistence_matrix, params, title, ax=ax)
     draw_lines(params, ax=ax)
 
 def add_arrows(fig, axs, color="green"):
@@ -119,11 +121,11 @@ def summary_plot(params):
 
     fig, axs = plt.subplots(2, 3, figsize=(10, 8))
     fig.subplots_adjust(wspace=0.3, hspace=0.4)  # more whitespace between subplots
-    plot_coexistence_subplot(axs[0, 1], coexistence_lin_sat, params, 'Linear–saturating') # own function implemented for something else
-    plot_coexistence_subplot(axs[0, 2], coexistence_sat_sat, params, 'Saturating–saturating')
-    plot_coexistence_subplot(axs[1, 0], coexistence_lin_lin_pred, params, 'Linear–linear + predation')
-    plot_coexistence_subplot(axs[1, 1], coexistence_lin_sat_pred, params, 'Linear–saturating + predation')
-    plot_coexistence_subplot(axs[1, 2], coexistence_sat_sat_pred, params, 'Saturating–saturating + predation')
+    coexistence_plot_with_lines(axs[0, 1], coexistence_lin_sat, params, 'Linear–saturating') # own function implemented for something else
+    coexistence_plot_with_lines(axs[0, 2], coexistence_sat_sat, params, 'Saturating–saturating')
+    coexistence_plot_with_lines(axs[1, 0], coexistence_lin_lin_pred, params, 'Linear–linear + predation')
+    coexistence_plot_with_lines(axs[1, 1], coexistence_lin_sat_pred, params, 'Linear–saturating + predation')
+    coexistence_plot_with_lines(axs[1, 2], coexistence_sat_sat_pred, params, 'Saturating–saturating + predation')
 
     #add_arrows(fig, axs)
     
@@ -132,7 +134,6 @@ def summary_plot(params):
     fig.text(0.99, 0.01, param_text, ha='right', va='bottom', fontsize=10, bbox=dict(facecolor='white', alpha=0.7, edgecolor='gray'))
 
     return fig, axs
-
 
 def summary_dynamics_plots(params): 
 
