@@ -37,7 +37,7 @@ def full_system(x,t,params):
     C2 = x[2]  # consumer 2
     P  = x[3]  # predator    
     
-    Rdot = (1-R)*R - a1*C1*R/(1+a1*h1*R) - a2*C2*R/(1+a2*h2*R)
+    Rdot = ((1-R) - a1*C1/(1+a1*h1*R) - a2*C2/(1+a2*h2*R))*R
     C1dot = (a1*R/(1+a1*h1*R) - d1 - aP*P/(1+aP*hP*(C1+C2)))*C1
     C2dot = (a2*R/(1+a2*h2*R) - d2 - aP*P/(1+aP*hP*(C1+C2)))*C2
     Pdot = (aP*(C1+C2)/(1+aP*hP*(C1+C2)) - dP)*P
