@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 from plotting import simple_d1d2
 import glob
 import shutil
-from tqdm import tqdm
+
+import concurrent.futures
     
 def main():
     # baseline parameter set
@@ -29,8 +30,8 @@ def main():
     }
 
     varying_params = {
-        'a2': [0.125, 0.25, 0.5, 1, 2, 8]       # values for a2
-        #'h2': [0.125, 0.25, 0.5, 2, 4, 8],       # values  for h2
+        'a2': [0.125, 0.25, 0.5, 1, 2, 4, 8],       # values for a2
+        'h2': [0.125, 0.25, 0.5, 1, 2, 4, 8],       # values  for h2
         #'aP': [0.125, 0.25, 0.5, 2, 4],          # values for aP
         #'dP': [0.0625, 0.125, 0.5, 0.75, 1]   # values for dP
     }
@@ -38,54 +39,39 @@ def main():
     # append to param_sets all combinations of baseline with one varying parameter
     param_sets = []
 
-    for param, values in varying_params.items():
-        for val in values:
+    for a2_value in varying_params['a2']:
+        for h2_value in varying_params['h2']:
             params = baseline.copy()
-            params[param] = val
+            params['a2'] = a2_value
+            params['h2'] = h2_value
             param_sets.append(params)
+    
+    
+    #for param, values in varying_params.items():
+    #    for val in values:
+    #        params = baseline.copy()
+    #        params[param] = val
+    #        param_sets.append(params)
 
-    param_sets = [baseline.copy()] + param_sets
+    #param_sets = [baseline.copy()] + param_sets
     for i, params in enumerate(param_sets):
         param_str = ", ".join(f"{k}={v}" for k, v in params.items())
         print(f"Set {i+1}: {param_str}")
-    '''
     run_many_cases_parallel('lin_sat',param_sets)
     print("All lin_sat models done")
     run_many_cases_parallel('lin_sat_pred',param_sets)
     print("All lin_sat_pred models done")
     run_many_cases_parallel('lin_lin_pred',param_sets)
     print("All lin_lin_pred models done")
-    
     run_many_cases_parallel('lin_sat_additional_mortality',param_sets)
-    
     print("All lin_sat_additional_mortality models done")
     run_many_cases_parallel('sat_sat',param_sets)
     print("All sat_sat models done")
     run_many_cases_parallel('sat_sat_pred',param_sets)
     print("All sat_sat_pred models done")
-    run_many_cases_parallel('sat_sat_additional_mortality',param_sets)
-    print("All sat_sat_additional_mortality models done")
-    '''
-    '''
-    for h2 in np.arange(0, 4.5, 0.5):
-        params = {'a1': 1, 'a2': 4, 'aP': .25, # or a set with [] when model_name = 'all'
-                            'h2': h2, 'hP': 0, 'dP': 0.1,
-                            'resolution': 100} 
-        model_name = 'lin_sat_pred'  # options: 'lin_sat', 'lin_sat_pred', 
-                            # 'sat_sat', 'sat_sat_pred',
-                            # 'lin_lin', 'lin_lin_pred', 
-                            # 'lin_sat_additional_mortality',
-                            # 'sat_sat_additional_mortality',
-                            # 'all'
-        if model_name != 'all':
-            run_one_case(model_name, params)
-        else:
-            run_all_cases([params])
-    '''
-    for filename in glob.glob('results/matrices/matrices_*.npz'):
-        stats = matrix_to_statistics(filename=filename)
-    filenames = glob.glob('results/matrices/matrices_1_4_1_1_0_*_50.npz')
-    load_and_plot_statistics(param_list=param_sets,varying_param='a2', stat_keys=['statistics_lin_sat_pred', 'statistics_lin_sat', 'statistics_lin_lin_pred','statistics_lin_sat_additional_mortality']) 
+    #run_many_cases_parallel('sat_sat_additional_mortality',param_sets)
+    #print("All sat_sat_additional_mortality models done")
+
 
 def explore_results():  # not really finished yet
     
@@ -133,9 +119,12 @@ def explore_results():  # not really finished yet
 
     params = {'a1': a1, 'a2': a2, 'aP': aP, 'h2': h2, 'dP': dP, 'd1': d1_val, 'd2': d2_val}
     summary_dynamics_plots(params) # defined in plotting
-    plt.show(block=False)
 
 def run_one_case(model_name, params):
+    
+    # terminal log
+    param_str = ", ".join(f"{k}={v}" for k, v in params.items())
+    print(f"Starting model run: {model_name} with parameters: {param_str}")
     
     old_data = {} # for potentially updating the saved file
     coexistence_matrix = None # to check if has been simulated already
@@ -144,12 +133,12 @@ def run_one_case(model_name, params):
     key = 'coexistence_' + model_name # name of the matrix variable
 
     if os.path.exists(filename):
-        data = np.load(filename, allow_pickle=True)
-        old_data = dict(data) # will be updated with new results if any
-        key = 'coexistence_' + model_name # name of the matrix variable
-        if key in data.files: # matrix already saved
-            coexistence_matrix = data[key]
-            print(f"Results already exist for {filename}. Skipping simulation.")
+        with np.load(filename, allow_pickle=True) as data:
+            old_data = {k: data[k].copy() for k in data} # will be updated with new results if any
+            key = 'coexistence_' + model_name # name of the matrix variable
+            if key in old_data: # matrix already saved
+                coexistence_matrix = old_data[key]
+                print(f"Results already exist for {filename}. Skipping simulation.")
         
     if coexistence_matrix is None: # matrix not yet saved
         model_func = globals()[model_name]
@@ -158,14 +147,15 @@ def run_one_case(model_name, params):
         # Update old_data with new results
         old_data[key] = coexistence_matrix
         old_data['params'] = params
-        np.savez(filename, **old_data)
+        with open(filename, "wb") as f:
+            np.savez(f, **old_data)
         print(f"Simulation done and results saved to {filename}.")
 
     # Plotting
     plot_title = model_name.replace('_', ' ')
     #coexistence_plot_with_lines(coexistence_matrix, params, plot_title)
     simple_d1d2(coexistence_matrix, params, plot_title)
-    plt.show()
+    #plt.show()
 
 def run_all_cases(param_sets):
     for params in param_sets:
@@ -180,11 +170,11 @@ def run_all_cases(param_sets):
     os.makedirs("results/timeseries", exist_ok=True) # recreate an empty folder
 
     # plot
-    tqdm.write("Plotting starts")
+    
     fig = summary_plot(params)[0]
     plot_filename = make_filename('results/plots/summary', params, extension='.png')
     fig.savefig(plot_filename)    
-    tqdm.write("Plotting done")
+    print("Plotting done")
 
 def matrix_to_statistics(params=None, filename=None): # provide either params or filename
     # determine filename
@@ -219,7 +209,6 @@ def load_and_plot_statistics(param_list, stat_keys=None, varying_param=None):
         stat_keys: list of statistics keys to plot (e.g., ['statistics_lin_sat', ...])
         varying_param: name of the parameter that varies between param sets (for x-axis)
         """
-        import matplotlib.pyplot as plt
 
         if stat_keys is None:
             stat_keys = ['statistics_lin_sat', 'statistics_lin_sat_pred', 'statistics_lin_lin_pred']
@@ -264,50 +253,35 @@ def load_and_plot_statistics(param_list, stat_keys=None, varying_param=None):
         if min(resolutions) != max(resolutions):
             print("Warning: Different resolutions found.")
 
-        # Sort data by x_vals (so that the plot lines go from left to right)
-        sorted_indices = np.argsort(x_vals)
-
-        # Sort x_vals and resolutions
-        x_vals = [x_vals[i] for i in sorted_indices]
-        resolutions = [resolutions[i] for i in sorted_indices]
-
-        # Sort stats_data for each key
-        for key in stat_keys:
-            stats_data[key]['num_points'] = [stats_data[key]['num_points'][i] for i in sorted_indices]
-            stats_data[key]['num_cycles'] = [stats_data[key]['num_cycles'][i] for i in sorted_indices]
-
-
         # Plotting from stats_data
         fig, ax = plt.subplots(figsize=(12, 5))
 
         if len(stat_keys) == 1: # only one model, stacked diagram
             key = stat_keys[0]
             # Convert to numpy arrays for relative coex area
-            y1 = np.array(stats_data[key]['num_points']) / np.array(resolutions)**2
-            y2 = np.array(stats_data[key]['num_cycles']) / np.array(resolutions)**2
+            y1 = np.array(stats_data[key]['num_points']) / np.array(resolutions)
+            y2 = np.array(stats_data[key]['num_cycles']) / np.array(resolutions)
     
             ax.stackplot(x_vals, y1, y2, labels=['Fixed Points', 'Limit Cycles'], alpha=0.7)
             ax.set_title(f'Stacked Diagram for {key}')
             ax.set_xlabel(varying_param if varying_param else 'Parameter Set')
             ax.set_ylabel('Relative coexistence area')
             ax.legend()
-            plt.show()
- 
+            #plt.show()
         else: # multiple models, line plots
            
             for key in stat_keys: # cycle through all models specified
                 # Convert to numpy arrays for relative coex area
-                y1 = np.array(stats_data[key]['num_points']) / np.array(resolutions)**2
-                y2 = np.array(stats_data[key]['num_cycles']) / np.array(resolutions)**2
+                y1 = np.array(stats_data[key]['num_points']) / np.array(resolutions)
+                y2 = np.array(stats_data[key]['num_cycles']) / np.array(resolutions)
                 ax.plot(x_vals, y1+y2, marker='o', label=key.replace('statistics_', '').replace('_', ' '))
             ax.set_title('Relative size of coexistence region')
             ax.set_xlabel(varying_param if varying_param else 'Parameter Set')
             ax.set_ylabel('Relative coexistence area')
             ax.legend()
             plt.tight_layout()
-            plt.show()
+            #plt.show()
 
-import concurrent.futures
 
 def run_many_cases_parallel(model_name, param_sets, max_workers=os.cpu_count()):
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
