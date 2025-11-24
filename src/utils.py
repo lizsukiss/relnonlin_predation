@@ -18,18 +18,13 @@ def simulate_and_save(filename, ode_func, x0, t, params, force_simulate=False): 
     if os.path.exists(filename) and not force_simulate:
         with np.load(filename, allow_pickle=True) as data:
             x = data['timeseries'].copy()
-    else:
-        with open(os.devnull, 'w') as fnull:
-            with redirect_stderr(fnull):
-                # suppress fortran (lsoda) warnings
-                sys.stderr.flush()
-                devnull = os.open(os.devnull, os.O_WRONLY)
-                os.dup2(devnull, sys.stderr.fileno())
-                
-                x = integ.odeint(ode_func, x0, t, rtol=1e-14, atol=1e-12)
-                x = x[-int(np.floor(len(x)/10)):] # keep only last 10% of the time series
-                with open(filename, "wb") as f:
-                    np.savez(f, timeseries=x, params=params)
+    else:           
+        print("simulating")
+        x = integ.odeint(ode_func, x0, t, rtol=1e-7, atol=1e-10)
+        #x = x[-int(np.floor(len(x)/10)):] # keep only last 10% of the time series
+        with open(filename, "wb") as f:
+            np.savez(f, timeseries=x, params=params)
+        
     return x
 
 def make_filename(prefix, params, extension='.npz'):

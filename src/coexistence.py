@@ -33,13 +33,15 @@ def lin_sat(params):
     invasionrate_C2[invasionrate_C2<0]=0 
 
     # C1 can invade C2 if f1(\overline{R_{C_2}}) > 0 (\overline{R_{C_2}} is denoted by R_Ave)
-    for i in np.arange(0,resolution,1):
+
+    initial_density = [0.01, 0.01] # initial density for the first loop 
+    for i in np.arange(resolution-1,-1,-1):
 
         # Simulation of population dynamics
         tend  = 100000
         tstep = 0.1
         time_array = np.arange(0, tend, tstep) # time for simulation
-        initial_density = [0.01, 0.01] # initial density
+        
         rc_simulation_params = {'a': a2, 'h': h2, 'd': d2[i]}
 
         filename = make_filename('results/timeseries/subsystem/timeseries_RC', rc_simulation_params)
@@ -53,9 +55,18 @@ def lin_sat(params):
             params=rc_simulation_params
         )
 
-        average_R_density = np.mean(density_timeseries[:, 0]) # average resource density after transient dynamics 
-        invasionrate_C1[:,i] = a1*average_R_density - d1
+        initial_density = density_timeseries[-1] * 1.01 # initial density for the next run
+
+
         
+        # Check for NaN in timeseries
+        if np.any(np.isnan(density_timeseries)):
+            invasionrate_C1[:,i] = np.nan
+        else:
+            average_R_density = np.mean(density_timeseries[:, 0])
+            invasionrate_C1[:,i] = a1*average_R_density - d1
+
+
     invasionrate_C1[invasionrate_C1>0]=1
     invasionrate_C1[invasionrate_C1<0]=0 
 
@@ -119,14 +130,26 @@ def lin_sat_pred(params):
     d2 = get_grid(a2, h2, resolution)
 
     coexistence_mixed = np.zeros([resolution,resolution])
+    predator_mixed = np.zeros([resolution,resolution])
 
     # simulate for all d1 and d2 parameters with continuation (outward spiral)
     spiral_order = snail_order(resolution)
 
     initial_density = [0.01,0.01,0.01,0.01] # initial density for the first simulation
-    for i, j in spiral_order:
+    
+    total = len(spiral_order)
 
-        print("Open files:", len(psutil.Process(os.getpid()).open_files()))
+    for idx, (i, j) in enumerate(spiral_order):
+
+        # Print progress every 50 iterations
+        if idx % 50 == 0 or idx == total - 1:
+            pid = os.getpid()
+            try:
+                n_open = len(psutil.Process(pid).open_files())
+            except Exception:
+                n_open = 'N/A'
+            print(f"[Worker {pid}] lin_sat_pred progress: {idx+1}/{total} ({100*(idx+1)/total:.1f}%), open files: {n_open}")
+
         # Simulation of population dynamics
         tend  = 100000 
         tstep = 0.1
@@ -154,6 +177,13 @@ def lin_sat_pred(params):
                 coexistence_mixed[i,j] = 1 # fixed point
             else:
                 coexistence_mixed[i,j] = 2 # cycle 
+        if any(np.isnan(dens_Ave)):
+            coexistence_mixed[i,j] = np.nan # extinction due to numerical issues
+
+        # record predator density
+        if dens_Ave[3] > 10**-10:
+            predator_mixed[i,j] = dens_Ave[3]
+
 
         initial_density = density_timeseries[-1,:] + [0.0001,0.0001,0.0001,0.0001] # use the last density as initial density for the next simulation
         
@@ -165,7 +195,7 @@ def lin_sat_pred(params):
     print(folder_str)
     shutil.rmtree(folder_path)
         
-    return coexistence_mixed
+    return coexistence_mixed, predator_mixed
 
 def sat_sat_pred(params):
     check_params(params, {'a1', 'a2', 'aP', 'h2', 'dP', 'resolution'})
@@ -224,6 +254,9 @@ def sat_sat_pred(params):
                 coexistence_sat_sat_pred[i,j] = 1 # fixed point
             else:
                 coexistence_sat_sat_pred[i,j] = 2 # cycle  
+
+        if any(np.isnan(average_density)):
+            coexistence_sat_sat_pred[i,j] = np.nan # extinction due to numerical issues
 
         initial_density = density_timeseries[-1,:] + [0.0001,0.0001,0.0001,0.0001] # use the last density as initial density for the next simulation
 
@@ -291,6 +324,10 @@ def sat_sat(params): # the input parameters are the same as in the original mode
             else:
                 coexistence_sat_sat[i,j] = 2 # cycle  
         
+        if any(np.isnan(average_density)):
+            coexistence_sat_sat[i,j] = np.nan # extinction due to numerical issues
+
+
         initial_density = density_timeseries[-1,:] + [0.0001,0.0001,0.0001,0.0001] # use the last density as initial density for the next simulation
 
     # delete timeseries
@@ -355,6 +392,9 @@ def coexistence_general(params):
             else:
                 coexistence_general[i,j] = 2 # cycle  
         
+        if any(np.isnan(average_density)):
+            coexistence_general[i,j] = np.nan # extinction due to numerical issues
+
         initial_density = density_timeseries[-1,:] + [0.0001,0.0001,0.0001,0.0001] # use the last density as initial density for the next simulation
 
     # delete timeseries
@@ -411,13 +451,14 @@ def lin_sat_additional_mortality(params):
     invasionrate_C2[invasionrate_C2<0]=0 
 
     # C1 can invade C2 if f1(\overline{R_{C_2}}) > 0 (\overline{R_{C_2}} is denoted by R_Ave)
-    for i in np.arange(0, resolution, 1):
+    initial_density = [0.01, 0.01] # initial density for the first loop
+
+    for i in np.arange(resolution-1, -1, -1):
 
         # Simulation of population dynamics
         tend  = 100000
         tstep = 0.1
         time_array = np.arange(0, tend, tstep) # time for simulation
-        initial_density = [0.01, 0.01] # initial density
         rc_simulation_params = {'a': a2, 'h': h2, 'd': d2_modified[i]}
         filename = make_filename('results/timeseries/subsystem/timeseries_RC', rc_simulation_params)
         predator_prey_partial = lambda density, time: predator_prey(density, time, rc_simulation_params)
@@ -431,6 +472,8 @@ def lin_sat_additional_mortality(params):
 
         average_R_density = np.mean(density_timeseries[:, 0]) # average resource density after transient dynamics 
         invasionrate_C1[:,i] = a1*average_R_density - d1_modified
+
+        initial_density = density_timeseries[-1] + [0.001, 0.001] # initial density for the next run
         
     invasionrate_C1[invasionrate_C1>0]=1
     invasionrate_C1[invasionrate_C1<0]=0 
@@ -527,6 +570,9 @@ def sat_sat_additional_mortality(params):
                 coexistence_sat_sat_additional_mortality[i,j] = 1 # fixed point
             else:
                 coexistence_sat_sat_additional_mortality[i,j] = 2 # cycle
+
+        if any(np.isnan(average_density)):
+            coexistence_sat_sat_additional_mortality[i,j] = np.nan # extinction due to numerical issues
 
         initial_density = density_timeseries[-1,:] + [0.0001,0.0001,0.0001,0.0001] # use the last density as initial density for the next simulation
 	
