@@ -14,7 +14,7 @@ def get_grid(a, h, resolution): # mortality grid in dimension
     return np.linspace(0, maxd, resolution + 2)[1:-1]
 
 def simulate_and_save(filename, ode_func, x0, t, params, force_simulate=False): # generates, stores and returns the time series
-    
+    print("simulating")
     if os.path.exists(filename) and not force_simulate:
         with np.load(filename, allow_pickle=True) as data:
             x = data['timeseries'].copy()
