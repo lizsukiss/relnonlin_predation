@@ -3,6 +3,7 @@ from scipy import integrate as integ
 import os
 import sys
 from contextlib import redirect_stderr
+import matplotlib.pyplot as plt
 
 def check_params(params, required): # check if all required parameters are present in the params dictionary
     missing = [key for key in required if key not in params]
@@ -14,17 +15,17 @@ def get_grid(a, h, resolution): # mortality grid in dimension
     return np.linspace(0, maxd, resolution + 2)[1:-1]
 
 def simulate_and_save(filename, ode_func, x0, t, params, force_simulate=False): # generates, stores and returns the time series
-    print("simulating")
+    
     if os.path.exists(filename) and not force_simulate:
         with np.load(filename, allow_pickle=True) as data:
             x = data['timeseries'].copy()
     else:           
-        print("simulating")
-        x = integ.odeint(ode_func, x0, t, rtol=1e-7, atol=1e-10)
-        #x = x[-int(np.floor(len(x)/10)):] # keep only last 10% of the time series
+        x = integ.solve_ivp(ode_func, [t[0], t[-1]], x0, t_eval=t, rtol=1e-7, atol=1e-10)
+        x = x.y[:, -int(np.floor(len(x.t)/10)):] # keep only last 10% of the time series
         with open(filename, "wb") as f:
             np.savez(f, timeseries=x, params=params)
-        
+
+    print(f"Returning array with shape: {x.shape}")  # Debug
     return x
 
 def make_filename(prefix, params, extension='.npz'):

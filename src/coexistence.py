@@ -6,6 +6,7 @@ from utils import check_params, get_grid, make_filename, simulate_and_save, snai
 import os
 import shutil
 import psutil
+import sympy as sp
 
 
 def lin_sat(params):
@@ -36,7 +37,7 @@ def lin_sat(params):
 
     initial_density = [0.01, 0.01] # initial density for the first loop 
     for i in np.arange(resolution-1,-1,-1):
-
+        
         # Simulation of population dynamics
         tend  = 100000
         tstep = 0.1
@@ -44,8 +45,8 @@ def lin_sat(params):
         
         rc_simulation_params = {'a': a2, 'h': h2, 'd': d2[i]}
 
-        filename = make_filename('results/timeseries/subsystem/timeseries_RC', rc_simulation_params)
-        predator_prey_partial = lambda density, time: predator_prey(density, time, rc_simulation_params)
+        filename = make_filename('results/timeseries/RC/timeseries_RC', rc_simulation_params)
+        predator_prey_partial = lambda time, density: predator_prey(density, time, rc_simulation_params)
 
         density_timeseries = simulate_and_save( # last 10% of the time series 
             filename=filename,
@@ -55,15 +56,17 @@ def lin_sat(params):
             params=rc_simulation_params
         )
 
-        initial_density = density_timeseries[-1] * 1.01 # initial density for the next run
-
-
+        initial_density = density_timeseries[:,-1] * 1.01 # initial density for the next run
         
         # Check for NaN in timeseries
         if np.any(np.isnan(density_timeseries)):
             invasionrate_C1[:,i] = np.nan
+            initial_density = [0.001,0.001]
+        elif np.any(density_timeseries < 0):
+            invasionrate_C1[:,i] = np.nan
+            initial_density = [0.001,0.001]
         else:
-            average_R_density = np.mean(density_timeseries[:, 0])
+            average_R_density = np.mean(density_timeseries[0, :])
             invasionrate_C1[:,i] = a1*average_R_density - d1
 
 
@@ -74,16 +77,23 @@ def lin_sat(params):
 
     coexistence_gleanerbasic = coexistence_gleanerbasic*2 # limit cycle
 
-    # timeseries not deleted
+    # delete timeseries for all d2, given a2 and h2
+    filename = make_filename('results/timeseries/RC/timeseries_RC', rc_simulation_params) # only match until h_...
+    filenameprefix = filename.rsplit('_d', 1)[0]  # remove d and everything after
+    # delete all files starting with this prefix
+    for file in os.listdir(os.path.dirname(filenameprefix)):
+        if file.startswith(os.path.basename(filenameprefix)):
+            os.remove(os.path.join(os.path.dirname(filenameprefix), file))
     
     return coexistence_gleanerbasic
 
 def lin_lin_pred(params): # the parameters are the same as in the original model, the linearization is done in the function
-    check_params(params, {'a1', 'a2', 'aP', 'h2', 'dP', 'resolution'})
+    check_params(params, {'a1', 'a2', 'aP', 'h2', 'dP', 'hP', 'resolution'})
 
     a1 = params['a1']
     a2 = params['a2']
     aP = params['aP']
+    hP = params['hP']
     h2 = params['h2']
     dP = params['dP']
     resolution = params['resolution']
@@ -92,6 +102,7 @@ def lin_lin_pred(params): # the parameters are the same as in the original model
     d2 = get_grid(a2, h2, resolution)
 
     coexistence_lin_lin_predator = np.zeros([resolution,resolution])
+    stability_lin_lin_predator = np.zeros([resolution,resolution])
 
     P_star = np.zeros([resolution,resolution])
     R_star = np.zeros([resolution,resolution])
@@ -109,12 +120,37 @@ def lin_lin_pred(params): # the parameters are the same as in the original model
         C2_star[i,j] = dP/aP-C1_star[i,j]
         P_star[i,j] = ( d1[i] * aLin - d2[j] * a1 ) / ( a1 - aLin )
 
+        # Define symbolic variables
+        R, C1, C2, P = sp.symbols('R C1 C2 P', real=True, positive=True)
+        # Define the system symbolically (same structure as full_system)
+        Rdot = ((1-R) - a1*C1 - aLin*C2)*R
+        C1dot = (a1*R - d1[i] - aP*P/(1+aP*hP*(C1+C2)))*C1
+        C2dot = (aLin*R - d2[j] - aP*P/(1+aP*hP*(C1+C2)))*C2
+        Pdot = (aP*(C1+C2)/(1+aP*hP*(C1+C2)) - dP)*P
+        # Create vector of state variables and equations
+        state_vars = [R, C1, C2, P]
+        myequations = [Rdot,
+                     C1dot,
+                     C2dot,
+                     Pdot]
+
+        # Compute Jacobian matrix
+        mymatrix = sp.Matrix(myequations)
+        jacobian = mymatrix.jacobian(state_vars)
+
+        # To use it numerically, convert to a function:
+        jacobian_func = sp.lambdify([state_vars], jacobian, 'numpy')
+        eigenvalues = np.linalg.eigvals(jacobian_func([R_star[i,j], C1_star[i,j], C2_star[i,j], P_star[i,j]]))
+        if all(eigenvalues.real < 0):
+            stability_lin_lin_predator[i,j] = 1  # stable fixed point
+        
+   
     coexistence_lin_lin_predator = (C1_star > 0) & (C2_star > 0) & (P_star > 0) & (R_star > 0)
     coexistence_lin_lin_predator = coexistence_lin_lin_predator.astype(int) # fixed point equilibrium
 
     # no timeseries to delete
         
-    return coexistence_lin_lin_predator, P_star
+    return coexistence_lin_lin_predator, P_star, stability_lin_lin_predator
 
 def lin_sat_pred(params):
     check_params(params, {'a1', 'a2', 'aP', 'h2', 'dP', 'resolution'})
@@ -156,9 +192,9 @@ def lin_sat_pred(params):
         time_array = np.arange(0, tend, tstep) # time for simulation
         simulation_params = {'a1':a1, 'a2':a2, 'aP':aP, 'h1':0, 'h2':h2, 'hP':0, 'd1':d1[i], 'd2':d2[j], 'dP':dP}
 
-        filename = make_filename(prefix='results/timeseries/timeseries_RC1C2P_linsatpred', params=simulation_params)
+        filename = make_filename(prefix='results/timeseries/linsatpred/timeseries_RC1C2P_linsatpred', params=simulation_params)
 
-        full_system_partial = lambda density, time: full_system(density, time, simulation_params)
+        full_system_partial = lambda time, density: full_system(density, time, simulation_params)
         density_timeseries = simulate_and_save( # last 10% of the time series
             filename=filename,
             ode_func=full_system_partial,
@@ -167,11 +203,11 @@ def lin_sat_pred(params):
             params=simulation_params
         )
 
-        dens_Ave = np.mean(density_timeseries[:, :], axis=0) # average densities after transient dynamics 
+        dens_Ave = np.mean(density_timeseries[:, :], axis=1) # average densities after transient dynamics 
         
 
         if all(dens_Ave > 10**-10):
-            dens_CV = np.std(density_timeseries[:, :], axis=0) / dens_Ave
+            dens_CV = np.std(density_timeseries[:, :], axis=1) / dens_Ave
             
             if all(dens_CV < 0.01):
                 coexistence_mixed[i,j] = 1 # fixed point
@@ -185,13 +221,13 @@ def lin_sat_pred(params):
             predator_mixed[i,j] = dens_Ave[3]
 
 
-        initial_density = density_timeseries[-1,:] + [0.0001,0.0001,0.0001,0.0001] # use the last density as initial density for the next simulation
+        initial_density = density_timeseries[:, -1] * 1.01 # use the last density as initial density for the next simulation
         
         
     # delete timeseries
     folder_keys = ["a1", "h1", "a2", "h2", "aP", "hP", "dP"]
     folder_str = "_".join(f"{k}_{params[k]}" for k in folder_keys if k in params)
-    folder_path = 'results/timeseries/timeseries_RC1C2P_linsatpred/' + folder_str
+    folder_path = 'results/timeseries/linsatpred/timeseries_RC1C2P_linsatpred/' + folder_str
     print(folder_str)
     shutil.rmtree(folder_path)
         
@@ -234,9 +270,9 @@ def sat_sat_pred(params):
         time_array = np.arange(0, tend, tstep) # time for simulation
         simulation_params = {'a1':sat_a, 'a2':a2, 'aP':aP, 'h1':sat_h, 'h2':h2, 'hP':0, 'd1':sat_d, 'd2':d2[j], 'dP':dP}
 
-        filename = make_filename(prefix='results/timeseries/timeseries_RC1C2P_satsatpred',params=simulation_params,extension='npz')
+        filename = make_filename(prefix='results/timeseries/satsatpred/timeseries_RC1C2P_satsatpred',params=simulation_params,extension='npz')
 
-        full_system_partial = lambda density, time: full_system(density, time, simulation_params)
+        full_system_partial = lambda time, density: full_system(density, time, simulation_params)
         density_timeseries = simulate_and_save( # last 10% of the time series
             filename=filename,
             ode_func=full_system_partial,
@@ -245,10 +281,10 @@ def sat_sat_pred(params):
             params=simulation_params
         )
 
-        average_density = np.mean(density_timeseries[:, :], axis=0) # average densities after transient dynamics
+        average_density = np.mean(density_timeseries[:, :], axis=1) # average densities after transient dynamics
         
         if all(average_density > 10**-10):
-            dens_CV = np.std(density_timeseries[:, :], axis=0) / average_density
+            dens_CV = np.std(density_timeseries[:, :], axis=1) / average_density
             
             if all(dens_CV < 0.01):
                 coexistence_sat_sat_pred[i,j] = 1 # fixed point
@@ -258,12 +294,12 @@ def sat_sat_pred(params):
         if any(np.isnan(average_density)):
             coexistence_sat_sat_pred[i,j] = np.nan # extinction due to numerical issues
 
-        initial_density = density_timeseries[-1,:] + [0.0001,0.0001,0.0001,0.0001] # use the last density as initial density for the next simulation
+        initial_density = density_timeseries[:, -1] * 1.01 # use the last density as initial density for the next simulation
 
     # delete timeseries
     folder_keys = ["a1", "h1", "a2", "h2", "aP", "hP", "dP"]
     folder_str = "_".join(f"{k}_{params[k]}" for k in folder_keys if k in params)
-    folder_path = 'results/timeseries/timeseries_RC1C2P_satsatpred/' + folder_str
+    folder_path = 'results/timeseries/satsatpred/timeseries_RC1C2P_satsatpred/' + folder_str
     shutil.rmtree(folder_path)
         
     return coexistence_sat_sat_pred
@@ -303,8 +339,8 @@ def sat_sat(params): # the input parameters are the same as in the original mode
         time_array = np.arange(0, tend, tstep) # time for simulation
         simulation_params = {'a1':sat_a, 'a2':a2, 'aP':0, 'h1':sat_h, 'h2':h2, 'hP':0, 'd1':sat_d, 'd2':d2[j], 'dP':0}
 
-        filename = make_filename('results/timeseries/timeseries_RC1C2_satsat', simulation_params)
-        full_system_partial = lambda density, time: full_system(density, time, simulation_params)
+        filename = make_filename('results/timeseries/satsat/timeseries_RC1C2_satsat', simulation_params)
+        full_system_partial = lambda time, density: full_system(density, time, simulation_params)
 
         density_timeseries = simulate_and_save( # last 10% of the time series
             filename=filename,
@@ -314,10 +350,10 @@ def sat_sat(params): # the input parameters are the same as in the original mode
             params=simulation_params
         )
 
-        average_density = np.mean(density_timeseries[:, :], axis=0) # average densities after transient dynamics
+        average_density = np.mean(density_timeseries[:, :], axis=1) # average densities after transient dynamics
         
         if all(average_density > 10**-10):
-            dens_CV = np.std(density_timeseries[:, :], axis=0) / average_density
+            dens_CV = np.std(density_timeseries[:, :], axis=1) / average_density
             
             if all(dens_CV < 0.01):
                 coexistence_sat_sat[i,j] = 1 # fixed point
@@ -328,12 +364,12 @@ def sat_sat(params): # the input parameters are the same as in the original mode
             coexistence_sat_sat[i,j] = np.nan # extinction due to numerical issues
 
 
-        initial_density = density_timeseries[-1,:] + [0.0001,0.0001,0.0001,0.0001] # use the last density as initial density for the next simulation
+        initial_density = density_timeseries[:, -1] * 1.01 # use the last density as initial density for the next simulation
 
     # delete timeseries
     folder_keys = ["a1", "h1", "a2", "h2", "aP", "hP", "dP"]
     folder_str = "_".join(f"{k}_{params[k]}" for k in folder_keys if k in params)
-    folder_path = 'results/timeseries/timeseries_RC1C2_satsat/' + folder_str
+    folder_path = 'results/timeseries/satsat/timeseries_RC1C2_satsat/' + folder_str
     shutil.rmtree(folder_path) 
              
     return coexistence_sat_sat
@@ -371,9 +407,9 @@ def coexistence_general(params):
         time_array = np.arange(0, tend, tstep) # time for simulation
         simulation_params = {'a1':a1, 'a2':a2, 'aP':aP, 'h1':h1, 'h2':h2, 'hP':hP, 'd1':d1[i], 'd2':d2[j], 'dP':dP}
 
-        filename = make_filename('results/timeseries/timeseries_RC1C2P_general', simulation_params)
+        filename = make_filename('results/timeseries/general/timeseries_RC1C2P_general', simulation_params)
 
-        full_system_partial = lambda density, time: full_system(density, time, simulation_params)
+        full_system_partial = lambda time, density: full_system(density, time, simulation_params)
         density_timeseries = simulate_and_save( # last 10% of the time series
             filename=filename, 
             ode_func=full_system_partial,
@@ -382,10 +418,10 @@ def coexistence_general(params):
             params=simulation_params
         )
 
-        average_density = np.mean(density_timeseries[:, :], axis=0) # average densities after transient dynamics
+        average_density = np.mean(density_timeseries[:, :], axis=1) # average densities after transient dynamics
         
         if all(average_density > 10**-10):
-            dens_CV = np.std(density_timeseries[:, :], axis=0) / average_density
+            dens_CV = np.std(density_timeseries[:, :], axis=1) / average_density
             
             if all(dens_CV < 0.01):
                 coexistence_general[i,j] = 1 # fixed point
@@ -395,12 +431,12 @@ def coexistence_general(params):
         if any(np.isnan(average_density)):
             coexistence_general[i,j] = np.nan # extinction due to numerical issues
 
-        initial_density = density_timeseries[-1,:] + [0.0001,0.0001,0.0001,0.0001] # use the last density as initial density for the next simulation
+        initial_density = density_timeseries[:, -1] * 1.01 # use the last density as initial density for the next simulation
 
     # delete timeseries
     folder_keys = ["a1", "h1", "a2", "h2", "aP", "hP", "dP"]
     folder_str = "_".join(f"{k}_{params[k]}" for k in folder_keys if k in params)
-    folder_path = 'results/timeseries/timeseries_RC1C2P_general/' + folder_str
+    folder_path = 'results/timeseries/general/timeseries_RC1C2P_general/' + folder_str
     shutil.rmtree(folder_path)
     
     return coexistence_general
@@ -460,8 +496,8 @@ def lin_sat_additional_mortality(params):
         tstep = 0.1
         time_array = np.arange(0, tend, tstep) # time for simulation
         rc_simulation_params = {'a': a2, 'h': h2, 'd': d2_modified[i]}
-        filename = make_filename('results/timeseries/subsystem/timeseries_RC', rc_simulation_params)
-        predator_prey_partial = lambda density, time: predator_prey(density, time, rc_simulation_params)
+        filename = make_filename('results/timeseries/RC/timeseries_RC', rc_simulation_params)
+        predator_prey_partial = lambda time, density: predator_prey(density, time, rc_simulation_params)
         density_timeseries = simulate_and_save( # last 10% of the time series
             filename=filename,
             ode_func=predator_prey_partial,
@@ -470,10 +506,10 @@ def lin_sat_additional_mortality(params):
             params=rc_simulation_params
         )
 
-        average_R_density = np.mean(density_timeseries[:, 0]) # average resource density after transient dynamics 
+        average_R_density = np.mean(density_timeseries[0, :]) # average resource density after transient dynamics 
         invasionrate_C1[:,i] = a1*average_R_density - d1_modified
 
-        initial_density = density_timeseries[-1] + [0.001, 0.001] # initial density for the next run
+        initial_density = density_timeseries[:, -1] * 1.01 # initial density for the next run
         
     invasionrate_C1[invasionrate_C1>0]=1
     invasionrate_C1[invasionrate_C1<0]=0 
@@ -550,9 +586,9 @@ def sat_sat_additional_mortality(params):
         time_array = np.arange(0,tend,tstep) # time for simulation
         simulation_params = {'a1':sat_a, 'a2':a2, 'aP':0, 'h1':sat_h, 'h2':h2, 'hP':0, 'd1':sat_d, 'd2':d2_modified[j], 'dP':0}
 
-        filename = make_filename('results/timeseries/timeseries_RC1C2_satsat', simulation_params)
+        filename = make_filename('results/timeseries/satsat/timeseries_RC1C2_satsat', simulation_params)
 
-        full_system_partial = lambda density, time: full_system(density, time, simulation_params)
+        full_system_partial = lambda time, density: full_system(density, time, simulation_params)
         density_timeseries = simulate_and_save( # last 10% of the time series
             filename=filename,
             ode_func=full_system_partial,
@@ -561,10 +597,10 @@ def sat_sat_additional_mortality(params):
             params=simulation_params
         )
 
-        average_density = np.mean(density_timeseries[:, :], axis=0) # average densities after transient dynamics
+        average_density = np.mean(density_timeseries[:, :], axis=1) # average densities after transient dynamics
         
         if all(average_density > 10**-10):
-            dens_CV = np.std(density_timeseries[:, :], axis=0) / average_density
+            dens_CV = np.std(density_timeseries[:, :], axis=1) / average_density
         
             if all(dens_CV < 0.01):
                 coexistence_sat_sat_additional_mortality[i,j] = 1 # fixed point
@@ -574,12 +610,12 @@ def sat_sat_additional_mortality(params):
         if any(np.isnan(average_density)):
             coexistence_sat_sat_additional_mortality[i,j] = np.nan # extinction due to numerical issues
 
-        initial_density = density_timeseries[-1,:] + [0.0001,0.0001,0.0001,0.0001] # use the last density as initial density for the next simulation
+        initial_density = density_timeseries[:, -1] * 1.01 # use the last density as initial density for the next simulation
 	
     # delete timeseries
     folder_keys = ["a1", "h1", "a2", "h2", "aP", "hP", "dP"]
     folder_str = "_".join(f"{k}_{params[k]}" for k in folder_keys if k in params)
-    folder_path = 'results/timeseries/timeseries_RC1C2_satsat/' + folder_str
+    folder_path = 'results/timeseries/satsat/timeseries_RC1C2_satsat/' + folder_str
     shutil.rmtree(folder_path)
 	
     return coexistence_sat_sat_additional_mortality

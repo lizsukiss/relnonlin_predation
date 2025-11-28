@@ -8,7 +8,7 @@ from ode import predator_prey, full_system
 from analysis_tools import plot_individual_case
 from coexistence import lin_sat, lin_lin_pred, sat_sat, sat_sat_pred, lin_sat_pred, lin_sat_additional_mortality, sat_sat_additional_mortality
 from plotting import coexistence_plot_with_lines, summary_plot, summary_dynamics_plots
-from utils import make_filename, snail_order
+from utils import make_filename, snail_order, simulate_and_save
 import matplotlib.pyplot as plt
 from plotting import simple_d1d2
 import glob
@@ -17,6 +17,45 @@ import shutil
 import concurrent.futures
     
 def main():
+    '''
+    filename = 'a_test_simulation.npz'
+    predator_prey_partial = lambda time, density: predator_prey(density, time, rc_simulation_params)
+    tend  = 1000
+    tstep = .1
+    time_array = np.arange(0, tend, tstep)
+    rc_simulation_params = {'a': 2, 'h': 4.6, 'd': 0.15}
+
+    x = simulate_and_save(filename, predator_prey_partial, [0.1, 0.1], time_array, rc_simulation_params, force_simulate=True)
+    # plot the simulation
+    plt.figure(figsize=(10, 6))
+    plt.plot(time_array, x.y[0], label='Resource (R)', color='green')
+    plt.plot(time_array, x.y[1], label='Consumer (C2)', color='blue')
+    plt.legend()
+    plt.xlabel('Time')
+    plt.ylabel('Density')
+    plt.title('Population Dynamics')
+    #plt.show()
+
+    params = {'a1': 1, 'h1': 0, 'a2': 4.6, 'h2': 0.66, 'aP': 1, 'dP': 0.25, 'hP': 0, 'resolution': 100}
+    coex_matrix,P_matrix,stability_matrix = lin_lin_pred(params)
+    # imshow coex and stability matrix in subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+    c1 = ax1.imshow(coex_matrix.T, origin='lower', cmap='viridis', extent=(0, params['a1'], 0, params['a2']/(1+params['h2']*params['a2'])))
+    ax1.set_title('Coexistence Matrix')
+    ax1.set_xlabel('d1')
+    ax1.set_ylabel('d2')
+    # same width and height for both subplots
+    
+    #fig.colorbar(c1, ax=ax1, label='Coexistence (1=Yes, 0=No)')
+    c2 = ax2.imshow(stability_matrix.T, origin='lower', cmap='plasma', extent=(0, params['a1'], 0, params['a2']/(1+params['h2']*params['a2'])))
+    ax2.set_title('Stability Matrix')
+    ax2.set_xlabel('d1')
+    ax2.set_ylabel('d2')
+    #fig.colorbar(c2, ax=ax2, label='Stability (1=Stable, 0=Unstable)')
+    plt.show()
+
+    '''
+    
     # baseline parameter set
     baseline = {
     'a1': 1,
@@ -30,11 +69,12 @@ def main():
     }
 
     varying_params = {
-        'a2': [0.125, 0.25, 0.5, 1, 2, 4, 8],#np.logspace(-2,3, num=6, endpoint=True, base=2.0),       # values for a2
-        'h2': [0.125, 0.25, 0.5, 1, 2, 4, 8], #np.logspace(-2,3, num=6, endpoint=True, base=2.0),       # values  for h2
+        'a2': np.logspace(-2,5, num=15, endpoint=True, base=2.0),       # values for a2
+        'h2': np.logspace(-2,5, num=15, endpoint=True, base=2.0),       # values  for h2
         #'aP': [0.125, 0.25, 0.5, 2, 4],       # values for aP
         #'dP': [0.0625, 0.125, 0.5, 0.75, 1]   # values for dP
     }
+
 
     # append to param_sets all combinations of baseline with one varying parameter
     param_sets = []
@@ -57,12 +97,12 @@ def main():
     worker_counter = 0
 
     #param_sets = [baseline.copy()] + param_sets
-    '''
+    
     for i, params in enumerate(param_sets):
         param_str = ", ".join(f"{k}={v}" for k, v in params.items())
         print(f"Set {i+1}: {param_str}")
-    '''
-    '''
+    
+    
     run_many_cases_parallel('lin_sat',param_sets)
     print("All lin_sat models done")
     run_many_cases_parallel('lin_sat_pred',param_sets)
@@ -77,7 +117,7 @@ def main():
     #print("All sat_sat_pred models done")
     #run_many_cases_parallel('sat_sat_additional_mortality',param_sets)
     #print("All sat_sat_additional_mortality models done")
-    '''
+    
     
     # all matrices done, now compute statistics
     for params in param_sets:
@@ -188,6 +228,7 @@ def run_one_case(model_name, params):
     filename = make_filename('results/matrices/matrices', params)
     key_coex = 'coexistence_' + model_name # name of the matrix variable
     key_pred = 'predatordensity_' + model_name
+    key_stab = 'stability_' + model_name
 
     if os.path.exists(filename):
         
@@ -204,23 +245,29 @@ def run_one_case(model_name, params):
         if isinstance(result, tuple):
             coexistence_matrix = result[0] # coexistence matrix: always the first matrix
             predator_matrix = result[1]
+            if len(result) > 2:
+                stability_matrix = result[2]
+                
         else:
             coexistence_matrix = result
             predator_matrix = None
+            stability_matrix = None
 
         # Update old_data with new results
         old_data[key_coex] = coexistence_matrix
         old_data[key_pred] = predator_matrix
+        old_data[key_stab] = stability_matrix
+
         old_data['params'] = params
         with open(filename, "wb") as f:
             np.savez(f, **old_data)
         print(f"Simulation done and results saved to {filename}.")
 
     # Plotting
-    plot_title = model_name.replace('_', ' ')
-    #coexistence_plot_with_lines(coexistence_matrix, params, plot_title)
-    simple_d1d2(coexistence_matrix, params, plot_title)
-    #plt.show()
+    #plot_title = model_name.replace('_', ' ')
+    ##coexistence_plot_with_lines(coexistence_matrix, params, plot_title)
+    #simple_d1d2(coexistence_matrix, params, plot_title)
+    ##plt.show()
 
 def run_all_cases(param_sets):
     for params in param_sets:
@@ -235,7 +282,6 @@ def run_all_cases(param_sets):
     os.makedirs("results/timeseries", exist_ok=True) # recreate an empty folder
 
     # plot
-    
     fig = summary_plot(params)[0]
     plot_filename = make_filename('results/plots/summary', params, extension='.png')
     fig.savefig(plot_filename)    
