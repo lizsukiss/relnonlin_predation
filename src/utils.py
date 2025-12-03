@@ -5,31 +5,56 @@ import sys
 from contextlib import redirect_stderr
 import matplotlib.pyplot as plt
 
-def check_params(params, required): # check if all required parameters are present in the params dictionary
+def check_params(params, required): 
+    """
+
+    Check if all required parameters are present in the params dictionary (not used consistently)
+
+    """
+    
     missing = [key for key in required if key not in params]
     if missing:
         raise ValueError(f"Missing parameters: {', '.join(missing)}")
 
-def get_grid(a, h, resolution): # mortality grid in dimension
+def get_grid(a, h, resolution):
+    """
+        
+    Creates axis for the mortality grid
+    
+    """
+    
     maxd = a/(1+h*a)
     return np.linspace(0, maxd, resolution + 2)[1:-1]
 
-def simulate_and_save(filename, ode_func, x0, t, params, force_simulate=False): # generates, stores and returns the time series
+def simulate_and_save(filename, ode_func, x0, t, params, force_simulate=False): 
+    """
     
+    Generates, stores and returns the (last 10% of the) time series
+    
+    """
+
     if os.path.exists(filename) and not force_simulate:
         with np.load(filename, allow_pickle=True) as data:
             x = data['timeseries'].copy()
     else:           
-        x = integ.solve_ivp(ode_func, [t[0], t[-1]], x0, t_eval=t, rtol=1e-7, atol=1e-10)
+        x = integ.solve_ivp(ode_func, [t[0], t[-1]], x0, t_eval=t, rtol=1e-7, atol=1e-10) # solver: solve_ivp
         x = x.y[:, -int(np.floor(len(x.t)/10)):] # keep only last 10% of the time series
         with open(filename, "wb") as f:
             np.savez(f, timeseries=x, params=params)
 
-    print(f"Returning array with shape: {x.shape}")  # Debug
+    # print(f"Returning array with shape: {x.shape}")  # Debug
     return x
 
 def make_filename(prefix, params, extension='.npz'):
-    if 'd1' in params and 'd2' in params:
+    """
+    
+    Create filename based on prefix and parameters 
+    
+    """
+
+    # If simulation data with two consumers
+    if 'd1' in params and 'd2' in params: 
+    
         # Main parameters for folder name
         folder_keys = ["a1", "h1", "a2", "h2", "aP", "hP", "dP"]
         folder_str = "_".join(f"{k}_{params[k]}" for k in folder_keys if k in params)
@@ -47,9 +72,12 @@ def make_filename(prefix, params, extension='.npz'):
         cwd = os.getcwd()
         if os.path.basename(cwd) in ["notebooks", "src"]:
             full_path = os.path.join("..", full_path)
+
         return full_path
+    
+    # Else: single consumer or matrix
     else:
-        # Fallback to original behavior if d1 and d2 are not present
+        # Fallback to original behavior if d1 and d2 are not both present
         key_order = ["a", "h", "d", "a1", "a2", "aP", "h1", "h2", "hP", "d1", "d2", "dP", "resolution"]
         param_strs = [f"{k}_{params[k]}" for k in key_order if k in params]
         filename = f"{prefix}_{'_'.join(param_strs)}{extension}"
@@ -57,9 +85,16 @@ def make_filename(prefix, params, extension='.npz'):
         cwd = os.getcwd()
         if os.path.basename(cwd) in ["notebooks", "src"]:
             filename = os.path.join("../", filename)
+        
         return filename
         
 def snail_order(n):
+    """
+    
+    Generate index order for spiral continuation
+    
+    """
+
     order = []
     x = n // 2
     y = n // 2

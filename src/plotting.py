@@ -8,10 +8,14 @@ from functools import partial
 from utils import check_params, make_filename
 from ode import full_system
 
+
 def simple_d1d2(coexistence_matrix, params, title, ax=None):
     """
-    Plot the coexistence region on the given axes, or create a new figure if ax is None.
+
+    Plot the coexistence region from the provided matrix on the given axes, or create a new figure if ax is None.
+    
     """
+
     a1 = params['a1']
     h1 = params.get('h1', 0)  # Default to 0 if not provided
     a2 = params['a2']
@@ -37,7 +41,12 @@ def simple_d1d2(coexistence_matrix, params, title, ax=None):
     return ax, im
 
 def draw_lines(params,ax):
+    """
     
+    Draw lines for the original relative nonlinearity model on the given axis (invasion/exclusion/Hopf bifurcation)
+
+    """
+
     check_params(params, ['a1', 'a2', 'h2'])
 
     a1 = params['a1']
@@ -76,141 +85,11 @@ def draw_lines(params,ax):
     '''
 
 def coexistence_plot_with_lines(coexistence_matrix, params, title, ax=None):
+    """
     
+    Create plot of coexistence area and add lines
+    
+    """
+
     simple_d1d2(coexistence_matrix, params, title, ax=ax)
     draw_lines(params, ax=ax)
-
-def add_arrows(fig, axs, color="green"):
-    """
-    Add arrows between subplots in a 2x3 grid.
-    fig: matplotlib Figure object
-    axs: array of Axes objects (shape [2,3])
-    color: arrow color
-    """
-    arrows = [
-        # (xyA, coordsA, xyB, coordsB, arrowstyle)
-        ((-0.5, .5), axs[0,1], (1.125, .5), axs[0,0], "->"),
-        ((-0.5, .5), axs[0,2], (1.125, .5), axs[0,1], "<-"),
-        ((.5, 1.25), axs[1,0], (.5, -.25), axs[0,0], "<-"),
-        ((.5, 1.25), axs[1,1], (.5, -.25), axs[0,1], "<-"),
-        ((.5, 1.25), axs[1,2], (.5, -0.25), axs[0,2], "<-"),
-        ((-.5, 0.5), axs[1,1], (1.125, 0.5), axs[1,0], "->"),
-        ((-.5, 0.5), axs[1,2], (1.125, 0.5), axs[1,1], "<-"),
-    ]
-    for xyA, axA, xyB, axB, arrowstyle in arrows:
-        con = ConnectionPatch(
-            xyA=xyA, coordsA=axA.transAxes,
-            xyB=xyB, coordsB=axB.transAxes,
-            arrowstyle=arrowstyle, color=color,
-            transform=fig.transFigure
-        )
-        fig.add_artist(con)
-
-def summary_plot(params):
-
-    check_params(params, ['a1', 'a2', 'h2', 'aP', 'dP', 'resolution'])
-
-    filename =  make_filename('results/matrices/matrices',params)
-    
-    data = np.load(filename)
-    coexistence_lin_sat= data['coexistence_lin_sat']
-    coexistence_sat_sat= data['coexistence_sat_sat']
-    coexistence_lin_lin_pred= data['coexistence_lin_lin_pred']
-    coexistence_lin_sat_pred= data['coexistence_lin_sat_pred']
-    coexistence_sat_sat_pred= data['coexistence_sat_sat_pred']
-
-    fig, axs = plt.subplots(2, 3, figsize=(10, 8))
-    fig.subplots_adjust(wspace=0.3, hspace=0.4)  # more whitespace between subplots
-    coexistence_plot_with_lines(axs[0, 1], coexistence_lin_sat, params, 'Linear–saturating') # own function implemented for something else
-    coexistence_plot_with_lines(axs[0, 2], coexistence_sat_sat, params, 'Saturating–saturating')
-    coexistence_plot_with_lines(axs[1, 0], coexistence_lin_lin_pred, params, 'Linear–linear + predation')
-    coexistence_plot_with_lines(axs[1, 1], coexistence_lin_sat_pred, params, 'Linear–saturating + predation')
-    coexistence_plot_with_lines(axs[1, 2], coexistence_sat_sat_pred, params, 'Saturating–saturating + predation')
-
-    #add_arrows(fig, axs)
-    
-    # Add params annotation to the figure
-    param_text = "\n".join([f"{k} = {v}" for k, v in params.items()])
-    fig.text(0.99, 0.01, param_text, ha='right', va='bottom', fontsize=10, bbox=dict(facecolor='white', alpha=0.7, edgecolor='gray'))
-
-    return fig, axs
-
-def summary_dynamics_plots(params): 
-
-    check_params(params, ['a1', 'a2', 'h2', 'aP', 'd1', 'd2', 'dP'])
-
-    a1 = params['a1']
-    a2 = params['a2']
-    h2 = params['h2']
-    aP = params['aP']
-    d1 = params['d1']
-    d2 = params['d2']
-    dP = params['dP']
-
-    # It would be difficult to reload the plots of the population dynamics because 
-    # (1) they were not necessarily simulated in the first place 
-    # (2) have been probably moved permanently to the external data storage
-    
-    tend  = 10000
-    tstep = 0.1
-    time_array  = np.arange(0,tend,tstep) # time for simulation
-
-    # LinSat
-    simulation_params_lin_sat = {'a1':a1, 'a2':a2, 'aP':0, 'h1':0, 'h2':h2, 'hP':0, 'd1':d1, 'd2':d2, 'dP':0}
-    initial_density_lin_sat = [0.01, 0.01, 0.01, 0]
-
-    system_lin_sat = lambda density, time: full_system(density, time, simulation_params_lin_sat)
-    dynamics_lin_sat  = integ.odeint(system_lin_sat, initial_density_lin_sat, time_array, rtol = 10**(-14), atol = 10**(-12))
-
-    # LinSatPred
-    simulation_params_lin_sat_pred = {'a1':a1, 'a2':a2, 'aP':aP, 'h1':0, 'h2':h2, 'hP':0, 'd1':d1, 'd2':d2, 'dP':dP}
-    initial_density_lin_sat_pred = [0.01, 0.01, 0.01, 0.01]
-    
-    system_lin_sat_pred = lambda density, time: full_system(density, time, simulation_params_lin_sat_pred)
-    dynamics_lin_sat_pred  = integ.odeint(system_lin_sat_pred, initial_density_lin_sat_pred, time_array, rtol = 10**(-14), atol = 10**(-12))
-
-    # SatSat
-    gamma = a1/a2 + h2*d1
-    sat_a = gamma*a2
-    sat_h = h2/gamma
-    sat_d = d1
-    simulation_params_sat_sat = {'a1':sat_a, 'a2':a2, 'aP':0, 'h1':sat_h, 'h2':h2, 'hP':0, 'd1':sat_d, 'd2':d2, 'dP':0}
-    initial_density_sat_sat = [0.01, 0.01, 0.01, 0]
-
-    system_sat_sat = lambda density, time: full_system(density, time, simulation_params_sat_sat)
-    dynamics_sat_sat  = integ.odeint(system_sat_sat, initial_density_sat_sat, time_array, rtol = 10**(-14), atol = 10**(-12))
-
-    # SatSatPred
-    simulation_params_sat_sat_pred = {'a1':sat_a, 'a2':a2, 'aP':aP, 'h1':sat_h, 'h2':h2, 'hP':0, 'd1':sat_d, 'd2':d2, 'dP':dP}
-    initial_density_sat_sat_pred = [0.01, 0.01, 0.01, 0.01]
-
-    system_sat_sat_pred = lambda density, time: full_system(density, time, simulation_params_sat_sat_pred)
-    dynamics_sat_sat_pred  = integ.odeint(system_sat_sat_pred, initial_density_sat_sat_pred, time_array, rtol = 10**(-14), atol = 10**(-12))
-
-    # LinLinPred
-    lin_a = (1-d2*h2)*a2
-    short_params_lin_lin_pred = {'a1':a1, 'a2':lin_a, 'aP':aP, 'h1':0, 'h2':0, 'hP':0, 'd1':d1, 'd2':d2, 'dP':dP}
-    initial_density_lin_lin_pred = [0.01, 0.01, 0.01, 0.01]
-
-    system_lin_lin_pred = lambda density, time: full_system(density, time, short_params_lin_lin_pred)
-    dynamics_lin_lin_pred  = integ.odeint(system_lin_lin_pred, initial_density_lin_lin_pred, time_array, rtol = 10**(-14), atol = 10**(-12))
-
-    fig, axs = plt.subplots(2, 3, figsize=(10, 8))
-    fig.subplots_adjust(wspace=0.3, hspace=0.4)  # more whitespace between subplots    axs[0, 1].plot(time_array, dynamics_lin_sat)
-    axs[0, 1].set_title("Linear and saturating")
-    axs[0, 2].plot(time_array, dynamics_sat_sat)
-    axs[0, 2].set_title("Both saturating")
-    axs[1, 0].plot(time_array, dynamics_lin_lin_pred)
-    axs[1, 0].set_title("Both linear + predator")
-    axs[1, 1].plot(time_array, dynamics_lin_sat_pred)
-    axs[1, 1].set_title("Linear and saturating")
-    axs[1, 2].plot(time_array, dynamics_sat_sat_pred)
-    axs[1, 2].set_title("Both saturating + predator")
-    
-    #add_arrows(fig, axs)
-    
-    # Add params annotation to the figure
-    #param_text = "\n".join([f"{k} = {v}" for k, v in params.items()])
-    #fig.text(0.99, 0.01, param_text, ha='right', va='bottom', fontsize=10, bbox=dict(facecolor='white', alpha=0.7, edgecolor='gray'))
-
-    return fig, axs
